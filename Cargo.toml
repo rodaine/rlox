@@ -1,0 +1,6 @@
+[package]
+name = "rlox"
+version = "0.1.0"
+authors = ["Chris Roche <rodaine+github@gmail.com>"]
+
+[dependencies]
