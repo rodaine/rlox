@@ -36,28 +36,95 @@ impl<'a> Scanner<'a> {
     fn err(&self, msg: &str) -> Option<Result<Token>> {
         Some(Err(Error::Lexical(self.line, msg.to_string(), self.lexeme.clone()).boxed()))
     }
+
+    fn match_static_token(&mut self, c: char, m: Type, u: Type) -> Option<Result<Token>> {
+        match self.match_advance(c) {
+            true => self.static_token(m),
+            false => self.static_token(u),
+        }
+    }
+
+    fn advance(&mut self) -> Option<char> {
+        if self.eof {
+            return None
+        }
+
+        self.src.next().or_else(|| {
+            self.eof = true;
+            Some('\0')
+        }).and_then(|c| {
+            self.lexeme.push(c);
+            Some(c)
+        })
+    }
+
+    fn peek(&mut self) -> char {
+        self.src.peek()
+            .map_or(Some('\0'), |ch| Some(*ch))
+            .unwrap()
+    }
+
+    fn match_advance(&mut self, c: char) -> bool {
+        if self.peek() == c {
+            self.advance().unwrap();
+            return true
+        }
+
+        false
+    }
+
+    fn advance_until(&mut self, c: char) {
+        loop {
+            match self.peek() {
+                c | '\0' => return,
+                _ => self.advance()
+            }
+        }
+    }
 }
 
 impl<'a> Iterator for Scanner<'a> {
     type Item = Result<Token>;
 
     fn next(&mut self) -> Option<Self::Item> {
+        use token::Type::*;
+
         if self.eof {
             return None
         }
 
-        use token::Type::*;
+        self.lexeme.clear();
 
-        match self.src.next()
-            .or_else(|| {
-                self.eof = true;
-                Some('\0')
-            })
-            .and_then(|c| {
-                self.lexeme.push(c);
-                Some(c)
-            }).unwrap() {
+        let c = self.advance().unwrap();
+
+        match c {
             '(' => self.static_token(LeftParen),
+            ')' => self.static_token(RightParen),
+            '{' => self.static_token(LeftBrace),
+            '}' => self.static_token(RightBrace),
+            ',' => self.static_token(Comma),
+            '.' => self.static_token(Dot),
+            '-' => self.static_token(Minus),
+            '+' => self.static_token(Plus),
+            ';' => self.static_token(Semicolon),
+            '*' => self.static_token(Star),
+            '\0' => self.static_token(EOF),
+
+            '!' => self.match_static_token('=', BangEqual, Bang),
+            '=' => self.match_static_token('=', EqualEqual, Equal),
+            '<' => self.match_static_token('=', LessEqual, Less),
+            '>' => self.match_static_token('=', GreaterEqual, Greater),
+
+            '/' => {
+                if self.match_advance('/') {
+                    self.advance_until('\n');
+                    return self.next()
+                }
+                self.static_token(Slash)
+            },
+
+
+
             _ => self.err("unexpected character"),
         }
     }

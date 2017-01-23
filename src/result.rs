@@ -31,7 +31,7 @@ impl fmt::Display for Error {
             Error::Usage => write!(f, "Usage: rlox [script]"),
             Error::IO(ref e) => e.fmt(f),
             Error::Lexical(ref line, ref whence, ref msg) =>
-                write!(f, "[line {}] Error {}: {}", line, whence, msg),
+                write!(f, "[line {}] Error {}: {:?}", line, whence, msg),
         }
     }
 }

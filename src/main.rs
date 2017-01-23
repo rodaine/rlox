@@ -1,13 +1,12 @@
+mod result;
+mod token;
+mod scanner;
+
 use std::env;
 use std::fs::File;
 use std::io::prelude::*;
 use std::io;
 use std::process::exit;
-
-mod result;
-mod token;
-mod scanner;
-
 use result::Result;
 use scanner::TokenIterator;
 
@@ -55,11 +54,13 @@ fn run_prompt() -> Result<()> {
 
 fn run(buf: &str) -> Result<()> {
     let mut tokens = buf.chars().tokens();
+
     while let Some(res) = tokens.next() {
         match res {
             Ok(t) => println!("{}", t),
             Err(e) => return Err(e),
         }
     }
+
     Ok(())
 }
