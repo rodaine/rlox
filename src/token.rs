@@ -4,11 +4,9 @@ use std::fmt;
 pub struct Token {
     pub typ: Type,
     pub lexeme: String,
-    pub literal: Option<()>,
+    pub literal: Option<Literal>,
     pub line: u64,
 }
-
-
 
 impl fmt::Display for Token {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -16,7 +14,6 @@ impl fmt::Display for Token {
     }
 }
 
-#[allow(dead_code)]
 #[derive(Debug)]
 pub enum Type {
     LeftParen,
@@ -58,4 +55,10 @@ pub enum Type {
     Var,
     While,
     EOF,
+}
+
+#[derive(Debug)]
+pub enum Literal {
+    String(String),
+    Number(f64),
 }

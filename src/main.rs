@@ -58,7 +58,7 @@ fn run(buf: &str) -> Result<()> {
     while let Some(res) = tokens.next() {
         match res {
             Ok(t) => println!("{}", t),
-            Err(e) => return Err(e),
+            Err(e) => println!("{}", e),
         }
     }
 
