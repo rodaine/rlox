@@ -1,7 +1,6 @@
 use std::str::Chars;
-use std::iter::Peekable;
 use result::{Result, Error};
-use token::{Token, Type, Literal};
+use token::{Token, Type, Literal, RESERVED};
 use std::collections::{HashSet, VecDeque};
 use std::ops::Index;
 
@@ -151,6 +150,16 @@ impl<'a> Scanner<'a> {
 
         self.err("invalid numeric")
     }
+
+    fn identifier(&mut self) -> Option<Result<Token>> {
+        while is_alphanumeric(self.peek()) { self.advance(); }
+
+        let lex : &str = self.lexeme.as_ref();
+        let typ = RESERVED.get(lex)
+            .map_or(Type::Identifier, |t| t.clone());
+
+        self.static_token(typ)
+    }
 }
 
 impl<'a> Iterator for Scanner<'a> {
@@ -187,6 +196,7 @@ impl<'a> Iterator for Scanner<'a> {
 
                 '"' => return self.string(),
                 c if c.is_digit(10) => return self.number(),
+                c if is_alphanumeric(c) => return self.identifier(),
 
                 '/' => {
                     if self.match_advance('/') {
@@ -218,4 +228,8 @@ impl<'a> TokenIterator<'a> for Chars<'a> {
     fn tokens(self) -> Scanner<'a> {
         new(self)
     }
+}
+
+fn is_alphanumeric(c : char) -> bool {
+    return c.is_digit(36) || c == '_';
 }
