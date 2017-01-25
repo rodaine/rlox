@@ -154,11 +154,38 @@ impl<'a> Scanner<'a> {
     fn identifier(&mut self) -> Option<Result<Token>> {
         while is_alphanumeric(self.peek()) { self.advance(); }
 
-        let lex : &str = self.lexeme.as_ref();
+        let lex: &str = self.lexeme.as_ref();
         let typ = RESERVED.get(lex)
             .map_or(Type::Identifier, |t| t.clone());
 
         self.static_token(typ)
+    }
+
+    fn line_comment(&mut self) {
+        self.advance_until(['\n'].iter().cloned().collect());
+        self.lexeme.clear();
+    }
+
+    fn block_comment(&mut self) {
+        self.advance(); // *
+
+        loop {
+            let last = self.advance_until(['\n', '/'].iter().cloned().collect());
+            let next = self.peek();
+            match (last, next) {
+                (_, '\n') => self.line += 1,
+                ('*', '/') => {
+                    self.advance(); // *
+                    self.advance(); // /
+                    break;
+                }
+                (_, '\0') => break,
+                (_, _) => (), // noop
+            }
+            self.advance();
+        }
+
+        self.lexeme.clear();
     }
 }
 
@@ -195,16 +222,11 @@ impl<'a> Iterator for Scanner<'a> {
                 '>' => return self.match_static_token('=', GreaterEqual, Greater),
 
                 '"' => return self.string(),
-                c if c.is_digit(10) => return self.number(),
-                c if is_alphanumeric(c) => return self.identifier(),
 
-                '/' => {
-                    if self.match_advance('/') {
-                        self.advance_until(['\n'].iter().cloned().collect());
-                        self.lexeme.clear();
-                    } else {
-                        return self.static_token(Slash);
-                    }
+                '/' => match self.peek() {
+                    '/' => self.line_comment(),
+                    '*' => self.block_comment(),
+                    _ => return self.static_token(Slash),
                 },
 
                 c if c.is_whitespace() => {
@@ -213,6 +235,9 @@ impl<'a> Iterator for Scanner<'a> {
                         self.line += 1
                     }
                 },
+
+                c if c.is_digit(10) => return self.number(),
+                c if is_alphanumeric(c) => return self.identifier(),
 
                 _ => return self.err("unexpected character"),
             }
@@ -230,6 +255,6 @@ impl<'a> TokenIterator<'a> for Chars<'a> {
     }
 }
 
-fn is_alphanumeric(c : char) -> bool {
+fn is_alphanumeric(c: char) -> bool {
     return c.is_digit(36) || c == '_';
 }

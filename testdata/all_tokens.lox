@@ -15,8 +15,10 @@ multi-line string"
 
 12.12345678909876543456787654456
 
-98.number_func()
+98.number_func() /*
 
-98.76.float_func()
+this is a block comment!
+
+*/ 98.76.float_func()
 
 var language = "lox";
