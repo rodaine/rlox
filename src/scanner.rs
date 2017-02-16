@@ -1,6 +1,6 @@
 use std::str::Chars;
 use result::{Result, Error};
-use token::{Token, Type, Literal, RESERVED};
+use token::{Token, Type, Literal, reserved};
 use std::collections::{HashSet, VecDeque};
 use std::ops::Index;
 
@@ -155,7 +155,7 @@ impl<'a> Scanner<'a> {
         while is_alphanumeric(self.peek()) { self.advance(); }
 
         let lex: &str = self.lexeme.as_ref();
-        let typ = RESERVED.get(lex)
+        let typ = reserved(lex)
             .map_or(Type::Identifier, |t| t.clone());
 
         self.static_token(typ)
