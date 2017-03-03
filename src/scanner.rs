@@ -296,5 +296,5 @@ impl<'a> TokenIterator<'a> for Chars<'a> {
 }
 
 fn is_alphanumeric(c: char) -> bool {
-    return c.is_digit(36) || c == '_';
+    c.is_digit(36) || c == '_'
 }
