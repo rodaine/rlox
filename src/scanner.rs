@@ -48,7 +48,7 @@ pub struct Scanner<'a> {
 impl<'a> Scanner<'a> {
     /// Creates a new Scanner off a Chars iterator.
     pub fn new(c: Chars<'a>) -> Self {
-        Scanner{
+        Scanner {
             src: c,
             peeks: VecDeque::with_capacity(2),
             lexeme: "".to_string(),
@@ -140,9 +140,10 @@ impl<'a> Scanner<'a> {
     }
 
     fn match_static_token(&mut self, c: char, m: Type, u: Type) -> Option<Result<Token>> {
-        match self.match_advance(c) {
-            true => self.static_token(m),
-            false => self.static_token(u),
+        if self.match_advance(c) {
+            self.static_token(m)
+        } else {
+            self.static_token(u)
         }
     }
 
@@ -296,5 +297,5 @@ impl<'a> TokenIterator<'a> for Chars<'a> {
 }
 
 fn is_alphanumeric(c: char) -> bool {
-    return c.is_digit(36) || c == '_';
+    c.is_digit(36) || c == '_'
 }
