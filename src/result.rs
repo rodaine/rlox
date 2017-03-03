@@ -1,19 +1,37 @@
+//! A module describing Lox-specific Result and Error types
+
 use std::result;
 use std::error;
 use std::fmt;
 use std::io;
 
+/// A Lox-Specific Result Type
 pub type Result<T> = result::Result<T, Box<error::Error>>;
 
-#[allow(dead_code)]
+/// A Lox-Specific Error
 #[derive(Debug)]
 pub enum Error {
+    /// Returned if the CLI command is used incorrectly
     Usage,
+    /// Returned if there is an error reading from a file or stdin
     IO(io::Error),
+    /// Returned if the scanner encounters an error
     Lexical(u64, String, String),
 }
 
 impl Error {
+    /// Returns a boxed version of this error, useful for creating a valid Result
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # extern crate rlox;
+    /// # use rlox::*;
+    /// # use rlox::Error::*;
+    /// # fn main() {
+    /// let res : Result<()> = Err(Usage.boxed());
+    /// # }
+    /// ```
     pub fn boxed(self) -> Box<Error> {
         Box::new(self)
     }

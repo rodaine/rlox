@@ -1,27 +1,20 @@
-#[macro_use]
-extern crate lazy_static;
-
-mod result;
-mod token;
-mod scanner;
+extern crate rlox;
 
 use std::env;
 use std::fs::File;
 use std::io::prelude::*;
 use std::io;
 use std::process::exit;
-use result::Result;
-use scanner::TokenIterator;
+use rlox::{Result, Error};
+use rlox::scanner::TokenIterator;
 
 fn main() {
-    use result::Error::*;
-
     let args: Vec<String> = env::args().collect();
 
     let res: Result<()> = match args.len() {
         1 => run_prompt(),         // REPL if no script file
         2 => run_file(&args[1]),   // Interpret a file otherwise
-        _ => Err(Box::new(Usage)), // Print usage
+        _ => Err(Error::Usage.boxed()), // Print usage
     };
 
     match res {
@@ -29,19 +22,23 @@ fn main() {
         Err(e) => {
             println!("{}", e);
             exit(1);
-        },
+        }
     }
 }
 
+/// Runs a script from file f and returns.
+///
+/// The entire script is buffered, but the resource is released immediately,
+/// prior to running.
 fn run_file(f: &str) -> Result<()> {
     let mut buf = String::new();
-    {
-        File::open(f)?.read_to_string(&mut buf)?;
-    }
-
+    { File::open(f)?.read_to_string(&mut buf)?; }
     run(&buf)
 }
 
+/// Runs an interactive prompt (REPL)
+///
+/// Each line is executed independently. Use ctrl+c to exit.
 fn run_prompt() -> Result<()> {
     let mut buf = String::new();
     loop {
@@ -55,6 +52,7 @@ fn run_prompt() -> Result<()> {
     }
 }
 
+//
 fn run(buf: &str) -> Result<()> {
     let mut tokens = buf.chars().tokens();
 

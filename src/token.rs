@@ -1,12 +1,33 @@
+//! A module describing Lox tokens.
+
 use std::fmt;
+use std::default;
 use std::collections::HashMap;
 
+/// A Token read from source.
+///
+/// A Token describes the lexeme read from a source.
 #[derive(Debug)]
 pub struct Token {
+    /// This token's type
     pub typ: Type,
+    /// The raw lexeme read from source
     pub lexeme: String,
+    /// The literal value for string and number types
     pub literal: Option<Literal>,
+    /// The starting line number this token was read from
     pub line: u64,
+}
+
+impl default::Default for Token {
+    fn default() -> Self {
+        Token{
+            typ: Type::EOF,
+            lexeme: "".to_string(),
+            literal: None,
+            line: 0
+        }
+    }
 }
 
 impl fmt::Display for Token {
@@ -15,14 +36,18 @@ impl fmt::Display for Token {
     }
 }
 
+/// Describes a literal string or number value
 #[derive(Debug)]
+#[derive(PartialEq)]
 pub enum Literal {
     String(String),
     Number(f64),
 }
 
+/// Describes the type of a Token
 #[derive(Debug)]
 #[derive(Clone)]
+#[derive(PartialEq)]
 pub enum Type {
     LeftParen,
     RightParen,
@@ -65,8 +90,26 @@ pub enum Type {
     EOF,
 }
 
+/// Returns a matching Token Type if a keyword is reserved
+///
+/// # Examples
+///
+/// ```
+/// # extern crate rlox;
+/// # use rlox::token::*;
+/// # fn main() {
+/// let t = reserved("true").expect("'true' is a reserved keyword");
+/// assert_eq!(t, &Type::True);
+///
+/// assert!(reserved("foo").is_none());
+/// # }
+/// ```
+pub fn reserved(keyword: &str) -> Option<&Type> {
+    RESERVED.get(keyword)
+}
+
 lazy_static! {
-    pub static ref RESERVED: HashMap<&'static str, Type> = [
+    static ref RESERVED: HashMap<&'static str, Type> = [
         ("and", Type::And),
         ("class", Type::Class),
         ("else", Type::Else),
