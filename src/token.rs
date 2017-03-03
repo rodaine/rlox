@@ -1,5 +1,4 @@
 //! A module describing Lox tokens.
-#![allow(zero_ptr)]
 
 use std::fmt;
 use std::default;
