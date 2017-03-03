@@ -5,18 +5,16 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::io;
 use std::process::exit;
-use rlox::result::Result;
+use rlox::{Result, Error};
 use rlox::scanner::TokenIterator;
 
 fn main() {
-    use rlox::result::Error::Usage;
-
     let args: Vec<String> = env::args().collect();
 
     let res: Result<()> = match args.len() {
         1 => run_prompt(),         // REPL if no script file
         2 => run_file(&args[1]),   // Interpret a file otherwise
-        _ => Err(Usage.boxed()), // Print usage
+        _ => Err(Error::Usage.boxed()), // Print usage
     };
 
     match res {

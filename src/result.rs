@@ -26,8 +26,8 @@ impl Error {
     ///
     /// ```
     /// # extern crate rlox;
-    /// # use rlox::result::*;
-    /// # use rlox::result::Error::*;
+    /// # use rlox::*;
+    /// # use rlox::Error::*;
     /// # fn main() {
     /// let res : Result<()> = Err(Usage.boxed());
     /// # }

@@ -1,6 +1,7 @@
 //! A module describing Lox tokens.
 
 use std::fmt;
+use std::default;
 use std::collections::HashMap;
 
 /// A Token read from source.
@@ -18,6 +19,17 @@ pub struct Token {
     pub line: u64,
 }
 
+impl default::Default for Token {
+    fn default() -> Self {
+        Token{
+            typ: Type::EOF,
+            lexeme: "".to_string(),
+            literal: None,
+            line: 0
+        }
+    }
+}
+
 impl fmt::Display for Token {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?} {} {:?}", self.typ, self.lexeme, self.literal)
@@ -26,6 +38,7 @@ impl fmt::Display for Token {
 
 /// Describes a literal string or number value
 #[derive(Debug)]
+#[derive(PartialEq)]
 pub enum Literal {
     String(String),
     Number(f64),

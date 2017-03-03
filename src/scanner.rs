@@ -1,9 +1,42 @@
+//! A module describing the Lox token scanner.
+
 use std::str::Chars;
-use result::{Result, Error};
 use token::{Token, Type, Literal, reserved};
 use std::collections::{HashSet, VecDeque};
 use std::ops::Index;
+use Result;
+use Error;
 
+/// Scanner is an iterator that consumes a `Chars` iterator, returning `Result<Token>`.
+///
+/// Once an EOF token or Error has been returned, no more tokens will be emitted.
+///
+/// # Examples
+/// ```
+/// # extern crate rlox;
+/// # use rlox::scanner::*;
+/// # use rlox::token;
+/// # fn main() {
+/// let code = "num = 123";
+/// let mut scanner = Scanner::new(code.chars());
+///
+/// let ident = scanner.next().expect("should have token").unwrap();
+/// assert_eq!(token::Type::Identifier, ident.typ);
+/// assert_eq!("num", ident.lexeme);
+///
+/// let eq = scanner.next().expect("should have token").unwrap();
+/// assert_eq!(token::Type::Equal, eq.typ);
+///
+/// let lit = scanner.next().expect("should have token").unwrap();
+/// assert_eq!(token::Type::Number, lit.typ);
+/// assert_eq!(token::Literal::Number(123.), lit.literal.expect("should have a literal"));
+///
+/// let eof = scanner.next().expect("should have token").unwrap();
+/// assert_eq!(token::Type::EOF, eof.typ);
+///
+/// assert!(scanner.next().is_none());
+/// # }
+/// ```
 pub struct Scanner<'a> {
     src: Chars<'a>,
     peeks: VecDeque<char>,
@@ -12,13 +45,16 @@ pub struct Scanner<'a> {
     eof: bool,
 }
 
-fn new(c: Chars) -> Scanner {
-    Scanner {
-        src: c,
-        peeks: VecDeque::with_capacity(2),
-        lexeme: "".to_string(),
-        line: 1,
-        eof: false,
+impl<'a> Scanner<'a> {
+    /// Creates a new Scanner off a Chars iterator.
+    pub fn new(c: Chars<'a>) -> Self {
+        Scanner{
+            src: c,
+            peeks: VecDeque::with_capacity(2),
+            lexeme: "".to_string(),
+            line: 1,
+            eof: false,
+        }
     }
 }
 
@@ -203,7 +239,10 @@ impl<'a> Iterator for Scanner<'a> {
 
         loop {
             match self.advance().unwrap() {
-                '\0' => return self.static_token(EOF),
+                '\0' => {
+                    self.eof = true;
+                    return self.static_token(EOF)
+                },
 
                 '(' => return self.static_token(LeftParen),
                 ')' => return self.static_token(RightParen),
@@ -245,13 +284,14 @@ impl<'a> Iterator for Scanner<'a> {
     }
 }
 
+/// Describes a type that can be converted into a token Scanner.
 pub trait TokenIterator<'a> {
     fn tokens(self) -> Scanner<'a>;
 }
 
 impl<'a> TokenIterator<'a> for Chars<'a> {
     fn tokens(self) -> Scanner<'a> {
-        new(self)
+        Scanner::new(self)
     }
 }
 
