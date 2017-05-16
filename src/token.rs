@@ -2,7 +2,7 @@
 
 use std::fmt;
 use std::default;
-use std::collections::HashMap;
+use std::collections::{HashMap,HashSet};
 
 /// A Token read from source.
 ///
@@ -17,6 +17,12 @@ pub struct Token {
     pub literal: Option<Literal>,
     /// The starting line number this token was read from
     pub line: u64,
+}
+
+impl Token {
+    pub fn in_types(& self, types: HashSet<&Type>) -> bool {
+        types.contains(&self.typ)
+    }
 }
 
 impl default::Default for Token {
@@ -40,14 +46,16 @@ impl fmt::Display for Token {
 #[derive(Debug)]
 #[derive(PartialEq)]
 pub enum Literal {
-    String(String),
+    Nil,
+    Boolean(bool),
     Number(f64),
+    String(String),
 }
 
 /// Describes the type of a Token
 #[derive(Debug)]
 #[derive(Clone)]
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq, Hash)]
 pub enum Type {
     LeftParen,
     RightParen,

@@ -114,7 +114,7 @@ impl<'a> Scanner<'a> {
                 ch => {
                     last = ch;
                     self.advance()
-                },
+                }
             };
         };
         last
@@ -153,7 +153,7 @@ impl<'a> Scanner<'a> {
 
             match self.peek() {
                 '\n' => self.line += 1,
-                '"' if last == '\\' => { self.lexeme.pop(); },
+                '"' if last == '\\' => { self.lexeme.pop(); }
                 '"' => break,
                 '\0' => return self.err("unterminated string"),
                 _ => return self.err("unexpected character"),
@@ -195,7 +195,12 @@ impl<'a> Scanner<'a> {
         let typ = reserved(lex)
             .map_or(Type::Identifier, |t| t.clone());
 
-        self.static_token(typ)
+        match typ {
+            Type::Nil => self.literal_token(typ, Some(Literal::Nil)),
+            Type::True => self.literal_token(typ, Some(Literal::Boolean(true))),
+            Type::False => self.literal_token(typ, Some(Literal::Boolean(false))),
+            _ => self.static_token(typ)
+        }
     }
 
     fn line_comment(&mut self) {
@@ -243,7 +248,7 @@ impl<'a> Iterator for Scanner<'a> {
                 '\0' => {
                     self.eof = true;
                     return self.static_token(EOF)
-                },
+                }
 
                 '(' => return self.static_token(LeftParen),
                 ')' => return self.static_token(RightParen),
@@ -274,7 +279,7 @@ impl<'a> Iterator for Scanner<'a> {
                     if c == '\n' {
                         self.line += 1
                     }
-                },
+                }
 
                 c if c.is_digit(10) => return self.number(),
                 c if is_alphanumeric(c) => return self.identifier(),

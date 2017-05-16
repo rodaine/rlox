@@ -7,6 +7,7 @@ use std::io;
 use std::process::exit;
 use rlox::{Result, Error};
 use rlox::scanner::TokenIterator;
+use rlox::parser::Parser;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -54,11 +55,9 @@ fn run_prompt() -> Result<()> {
 
 //
 fn run(buf: &str) -> Result<()> {
-    for res in buf.chars().tokens() {
-        match res {
-            Ok(t) => println!("{}", t),
-            Err(e) => println!("{}", e),
-        }
+    match Parser::new(buf.chars().tokens()).parse() {
+        Ok(expr) => println!("{:?}", expr),
+        Err(e) => println!("{}", e),
     }
 
     Ok(())

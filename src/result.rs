@@ -17,6 +17,8 @@ pub enum Error {
     IO(io::Error),
     /// Returned if the scanner encounters an error
     Lexical(u64, String, String),
+    /// Returned if the parser encounters an error
+    Parse(u64, String, String)
 }
 
 impl Error {
@@ -48,8 +50,10 @@ impl fmt::Display for Error {
         match *self {
             Error::Usage => write!(f, "Usage: rlox [script]"),
             Error::IO(ref e) => e.fmt(f),
-            Error::Lexical(ref line, ref whence, ref msg) =>
-                write!(f, "[line {}] Error {}: {:?}", line, whence, msg),
+            Error::Lexical(ref line, ref msg, ref whence) =>
+                write!(f, "Lexical Error [line {}] {}: {:?}", line, msg, whence),
+            Error::Parse(ref line, ref msg, ref near) =>
+                write!(f, "Parse Error [line {}] {}: near {:?}", line, msg, near)
         }
     }
 }
@@ -60,6 +64,7 @@ impl error::Error for Error {
             Error::Usage => "Usage: rlox [script]",
             Error::IO(ref e) => e.description(),
             Error::Lexical(_, _, _) => "lexical error",
+            Error::Parse(_, _, _) => "parse error",
         }
     }
 
