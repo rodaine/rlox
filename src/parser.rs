@@ -1,13 +1,13 @@
-#![allow(dead_code)]
+use std::iter::Peekable;
+use std::error::Error as StdError;
 
-use Boxer;
 use ast::Expr;
+use Boxer;
 use result::{Result, Error};
 use scanner::Scanner;
 use token::{Type, Token};
 use token::Type::*;
-use std::iter::Peekable;
-use std::error::Error as StdError;
+
 
 pub struct Parser<'a> {
     src: Peekable<Scanner<'a>>,
@@ -90,7 +90,7 @@ impl<'a> Parser<'a> {
 impl<'a> Parser<'a> {
     fn check(&mut self, types: &[Type]) -> bool {
         match self.src.peek() {
-            Some(&Ok(ref t)) => t.in_types(types.iter().clone().collect()),
+            Some(&Ok(ref t)) => t.in_types(types),
             _ => false,
         }
     }
@@ -129,6 +129,7 @@ impl<'a> Parser<'a> {
     }
 
     #[cfg_attr(feature = "cargo-clippy", allow(while_let_on_iterator))]
+    #[allow(dead_code)]
     fn synchronize(&mut self) -> Result<()> {
         while let Some(tkn) = self.src.next() {
             if tkn?.typ == Semicolon && self.check(&[

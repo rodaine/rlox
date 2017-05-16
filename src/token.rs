@@ -2,7 +2,8 @@
 
 use std::fmt;
 use std::default;
-use std::collections::{HashMap,HashSet};
+use std::collections::{HashMap, HashSet};
+use std::cmp::Ordering;
 
 /// A Token read from source.
 ///
@@ -20,14 +21,15 @@ pub struct Token {
 }
 
 impl Token {
-    pub fn in_types(& self, types: HashSet<&Type>) -> bool {
-        types.contains(&self.typ)
+    pub fn in_types(&self, types: &[Type]) -> bool {
+        let hs: HashSet<&Type> = types.iter().clone().collect();
+        hs.contains(&self.typ)
     }
 }
 
 impl default::Default for Token {
     fn default() -> Self {
-        Token{
+        Token {
             typ: Type::EOF,
             lexeme: "".to_string(),
             literal: None,
@@ -43,8 +45,7 @@ impl fmt::Display for Token {
 }
 
 /// Describes a literal string or number value
-#[derive(Debug)]
-#[derive(PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Literal {
     Nil,
     Boolean(bool),
@@ -52,10 +53,35 @@ pub enum Literal {
     String(String),
 }
 
+impl PartialOrd for Literal {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        use std::cmp::Ordering::*;
+        use token::Literal::*;
+
+        match (self, other) {
+            (&Nil, &Nil) => Some(Equal),
+            (&Number(l), &Number(r)) => l.partial_cmp(&r),
+            (&String(ref l), &String(ref r)) => l.partial_cmp(r),
+            _ => None,
+        }
+    }
+}
+
+impl fmt::Display for Literal {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use token::Literal::*;
+
+        match *self {
+            Nil => write!(f, "nil"),
+            Boolean(b) => write!(f, "{}", b),
+            Number(n) => write!(f, "{}", n),
+            String(ref s) => write!(f, "{}", s),
+        }
+    }
+}
+
 /// Describes the type of a Token
-#[derive(Debug)]
-#[derive(Clone)]
-#[derive(PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Type {
     LeftParen,
     RightParen,
@@ -98,22 +124,24 @@ pub enum Type {
     EOF,
 }
 
-/// Returns a matching Token Type if a keyword is reserved
-///
-/// # Examples
-///
-/// ```
-/// # extern crate rlox;
-/// # use rlox::token::*;
-/// # fn main() {
-/// let t = reserved("true").expect("'true' is a reserved keyword");
-/// assert_eq!(t, &Type::True);
-///
-/// assert!(reserved("foo").is_none());
-/// # }
-/// ```
-pub fn reserved(keyword: &str) -> Option<&Type> {
-    RESERVED.get(keyword)
+impl Type {
+    /// Returns a matching Token Type if a keyword is reserved
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # extern crate rlox;
+    /// # use rlox::token::*;
+    /// # fn main() {
+    /// let t = Type::reserved("true").expect("'true' is a reserved keyword");
+    /// assert_eq!(t, &Type::True);
+    ///
+    /// assert!(Type::reserved("foo").is_none());
+    /// # }
+    /// ```
+    pub fn reserved(keyword: &str) -> Option<&Self> {
+        RESERVED.get(keyword)
+    }
 }
 
 lazy_static! {

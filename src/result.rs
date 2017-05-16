@@ -18,7 +18,9 @@ pub enum Error {
     /// Returned if the scanner encounters an error
     Lexical(u64, String, String),
     /// Returned if the parser encounters an error
-    Parse(u64, String, String)
+    Parse(u64, String, String),
+    /// Returned if there is an error at runtime
+    Runtime(u64, String, String)
 }
 
 impl Error {
@@ -53,7 +55,9 @@ impl fmt::Display for Error {
             Error::Lexical(ref line, ref msg, ref whence) =>
                 write!(f, "Lexical Error [line {}] {}: {:?}", line, msg, whence),
             Error::Parse(ref line, ref msg, ref near) =>
-                write!(f, "Parse Error [line {}] {}: near {:?}", line, msg, near)
+                write!(f, "Parse Error [line {}] {}: near {}", line, msg, &near),
+            Error::Runtime(ref line, ref msg, ref near) =>
+                write!(f, "Runtime Error [line {}] {}: near {}", line, msg, &near),
         }
     }
 }
@@ -65,6 +69,7 @@ impl error::Error for Error {
             Error::IO(ref e) => e.description(),
             Error::Lexical(_, _, _) => "lexical error",
             Error::Parse(_, _, _) => "parse error",
+            Error::Runtime(_, _, _) => "runtime error",
         }
     }
 

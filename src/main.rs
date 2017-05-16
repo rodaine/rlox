@@ -5,9 +5,11 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::io;
 use std::process::exit;
+
 use rlox::{Result, Error};
 use rlox::scanner::TokenIterator;
 use rlox::parser::Parser;
+use rlox::interpreter::Interpreter;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -34,7 +36,7 @@ fn main() {
 fn run_file(f: &str) -> Result<()> {
     let mut buf = String::new();
     { File::open(f)?.read_to_string(&mut buf)?; }
-    run(&buf)
+    run(&buf).map(|_| ())
 }
 
 /// Runs an interactive prompt (REPL)
@@ -45,20 +47,15 @@ fn run_prompt() -> Result<()> {
     loop {
         print!("> ");
         io::stdout().flush().unwrap();
-
         io::stdin().read_line(&mut buf)?;
-        run(&buf).unwrap();
-
+        if let Err(e) = run(&buf) { println!("{}", e); }
         buf.clear()
     }
 }
 
-//
 fn run(buf: &str) -> Result<()> {
-    match Parser::new(buf.chars().tokens()).parse() {
-        Ok(expr) => println!("{:?}", expr),
-        Err(e) => println!("{}", e),
-    }
-
+    let expr = Parser::new(buf.chars().tokens()).parse()?;
+    let out = Interpreter::run(&expr)?;
+    println!("{}", out);
     Ok(())
 }

@@ -1,11 +1,11 @@
 //! A module describing the Lox token scanner.
 
-use std::str::Chars;
-use token::{Token, Type, Literal, reserved};
 use std::collections::{HashSet, VecDeque};
 use std::ops::Index;
-use Result;
-use Error;
+use std::str::Chars;
+
+use result::{Result, Error};
+use token::{Token, Type, Literal};
 
 /// Scanner is an iterator that consumes a `Chars` iterator, returning `Result<Token>`.
 ///
@@ -37,6 +37,7 @@ use Error;
 /// assert!(scanner.next().is_none());
 /// # }
 /// ```
+#[derive(Debug)]
 pub struct Scanner<'a> {
     src: Chars<'a>,
     peeks: VecDeque<char>,
@@ -105,12 +106,13 @@ impl<'a> Scanner<'a> {
         false
     }
 
-    fn advance_until(&mut self, c: HashSet<char>) -> char {
+    fn advance_until(&mut self, c: &[char]) -> char {
         let mut last = '\0';
+        let chars: HashSet<&char> = c.iter().clone().collect();
 
         loop {
             match self.peek() {
-                ch if c.contains(&ch) || ch == '\0' => break,
+                ch if chars.contains(&ch) || ch == '\0' => break,
                 ch => {
                     last = ch;
                     self.advance()
@@ -149,7 +151,7 @@ impl<'a> Scanner<'a> {
 
     fn string(&mut self) -> Option<Result<Token>> {
         loop {
-            let last = self.advance_until(['\n', '"'].iter().cloned().collect());
+            let last = self.advance_until(&['\n', '"']);
 
             match self.peek() {
                 '\n' => self.line += 1,
@@ -192,7 +194,7 @@ impl<'a> Scanner<'a> {
         while is_alphanumeric(self.peek()) { self.advance(); }
 
         let lex: &str = self.lexeme.as_ref();
-        let typ = reserved(lex)
+        let typ = Type::reserved(lex)
             .map_or(Type::Identifier, |t| t.clone());
 
         match typ {
@@ -204,7 +206,7 @@ impl<'a> Scanner<'a> {
     }
 
     fn line_comment(&mut self) {
-        self.advance_until(['\n'].iter().cloned().collect());
+        self.advance_until(&['\n']);
         self.lexeme.clear();
     }
 
@@ -212,7 +214,7 @@ impl<'a> Scanner<'a> {
         self.advance(); // *
 
         loop {
-            let last = self.advance_until(['\n', '/'].iter().cloned().collect());
+            let last = self.advance_until(&['\n', '/']);
             let next = self.peek();
             match (last, next) {
                 (_, '\n') => self.line += 1,
