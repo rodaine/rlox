@@ -6,6 +6,7 @@ mod result;
 pub mod scanner;
 pub mod token;
 pub mod ast;
+pub mod parser;
 
 pub use result::{Result, Error};
 

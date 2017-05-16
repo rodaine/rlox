@@ -55,11 +55,13 @@ impl Printer {
 
 impl Visitor<String> for Printer {
     fn visit_expr(&mut self, e: &Expr) -> String {
-        use token::Literal::{Number as Num, String as Str};
+        use token::Literal::{Number as Num, String as Str, Nil as Null, Boolean as Bln};
 
         match *e {
             Literal(Num(n)) => format!("{}", n),
             Literal(Str(ref s)) => format!("\"{}\"", s),
+            Literal(Null) => String::from("nil"),
+            Literal(Bln(b)) => format!("{}", b),
 
             Grouping(ref e) => self.parens("group", &[e.deref()]),
 
