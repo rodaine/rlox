@@ -20,7 +20,7 @@ pub enum Error {
     /// Returned if the parser encounters an error
     Parse(u64, String, String),
     /// Returned if there is an error at runtime
-    Runtime(u64, String, String)
+    Runtime(u64, String, String),
 }
 
 impl Error {
@@ -36,7 +36,7 @@ impl Error {
     /// let res : Result<()> = Err(Usage.boxed());
     /// # }
     /// ```
-    pub fn boxed(self) -> Box<Error> {
+    pub fn boxed(self) -> Box<error::Error> {
         Box::new(self)
     }
 }

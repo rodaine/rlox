@@ -1,7 +1,10 @@
+#![allow(dead_code)]
+
 use std::iter::Peekable;
 use std::error::Error as StdError;
 
-use ast::Expr;
+use ast::expr::Expr;
+use ast::stmt::Stmt;
 use Boxer;
 use result::{Result, Error};
 use scanner::Scanner;
@@ -13,13 +16,106 @@ pub struct Parser<'a> {
     src: Peekable<Scanner<'a>>,
 }
 
+// Public methods on Parser
 impl<'a> Parser<'a> {
     pub fn new(s: Scanner<'a>) -> Self { Parser { src: s.peekable() } }
-    pub fn parse(&mut self) -> Result<Expr> { self.expression() }
 }
 
+impl<'a> Iterator for Parser<'a> {
+    type Item = Result<Stmt>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.src.peek().is_none() || self.check_next(&[Type::EOF]).is_some() {
+            return None
+        }
+
+        let res = self.statement();
+        if res.is_err() { self.synchronize(); }
+
+        Some(res)
+    }
+}
+
+// Private, statement-related methods on the Parser
 impl<'a> Parser<'a> {
-    fn expression(&mut self) -> Result<Expr> { self.equality() }
+    fn statement(&mut self) -> Result<Stmt> {
+        let n: Option<Result<Token>> = self.check_next(&[
+            Semicolon,
+            Print,
+            Var,
+            LeftBrace,
+        ]);
+
+        if n.is_none() {
+            return self.expr_statement();
+        }
+
+        let tkn: Token = n.unwrap()?;
+
+        match tkn.typ {
+            Semicolon => Ok(Stmt::Empty),
+            Print => self.print_statement(),
+            Var => self.decl_statement(),
+            LeftBrace => self.block_statement(),
+            _ => Err(Parser::unexpected(&tkn)),
+        }
+    }
+
+    fn print_statement(&mut self) -> Result<Stmt> {
+        let expr: Expr = self.expression()?;
+        self.must_next(&[Semicolon])?;
+        Ok(Stmt::Print(expr))
+    }
+
+    fn expr_statement(&mut self) -> Result<Stmt> {
+        let expr: Expr = self.expression()?;
+        self.must_next(&[Semicolon])?;
+        Ok(Stmt::Expression(expr))
+    }
+
+    fn decl_statement(&mut self) -> Result<Stmt> {
+        let id: Token = self.must_next(&[Identifier])?;
+
+        if self.check_next(&[Equal]).is_none() {
+            return Ok(Stmt::Declaration(id.lexeme, None));
+        }
+
+        let expr: Expr = self.expression()?;
+
+        self.must_next(&[Semicolon])?;
+
+        Ok(Stmt::Declaration(id.lexeme, Some(expr)))
+    }
+
+    fn block_statement(&mut self) -> Result<Stmt> {
+        let mut stmts : Vec<Stmt> = Vec::new();
+
+        while self.check_next(&[RightBrace]).is_none() && !self.src.peek().is_none() {
+            stmts.push(self.statement()?);
+        }
+
+        Ok(Stmt::Block(stmts))
+    }
+}
+
+// Private, expression-related methods on the Parser
+impl<'a> Parser<'a> {
+    fn expression(&mut self) -> Result<Expr> { self.assignment() }
+
+    fn assignment(&mut self) -> Result<Expr> {
+        let expr: Expr = self.equality()?;
+
+        if let Some(res) = self.check_next(&[Equal]) {
+            let eq: Token = res?;
+
+            return match expr {
+                Expr::Identifier(id) => Ok(Expr::Assignment(id, self.assignment()?.boxed())),
+                _ => Err(Parser::unexpected(&eq)),
+            }
+        }
+
+        Ok(expr)
+    }
 
     fn equality(&mut self) -> Result<Expr> {
         let mut expr: Expr = self.comparison()?;
@@ -70,8 +166,9 @@ impl<'a> Parser<'a> {
     }
 
     fn primary(&mut self) -> Result<Expr> {
-        if let Some(Ok(tkn)) = self.check_next(&[Nil, True, False, String, Number]) {
+        if let Some(Ok(tkn)) = self.check_next(&[Nil, True, False, String, Number, Identifier]) {
             return match tkn.typ {
+                Identifier => Ok(Expr::Identifier(tkn.lexeme.clone())),
                 Nil | True | False | Number | String => Ok(Expr::Literal(tkn.literal.unwrap())),
                 _ => Err(Parser::unexpected(&tkn)),
             }
@@ -87,6 +184,7 @@ impl<'a> Parser<'a> {
     }
 }
 
+// Token iterator related methods on the Parser
 impl<'a> Parser<'a> {
     fn check(&mut self, types: &[Type]) -> bool {
         match self.src.peek() {
@@ -129,24 +227,31 @@ impl<'a> Parser<'a> {
     }
 
     #[cfg_attr(feature = "cargo-clippy", allow(while_let_on_iterator))]
-    #[allow(dead_code)]
-    fn synchronize(&mut self) -> Result<()> {
-        while let Some(tkn) = self.src.next() {
-            if tkn?.typ == Semicolon && self.check(&[
-                Class,
-                Fun,
-                Var,
-                For,
-                If,
-                While,
-                Print,
-                Return,
-            ]) {
-                return Ok(())
+    fn synchronize(&mut self) {
+        loop {
+            if let Some(&Err(_)) = self.src.peek() {
+                return
+            }
+
+            let tkn: Option<Result<Token>> = self.src.next();
+
+            if tkn.is_none() { return }
+
+            if let Some(Ok(t)) = tkn {
+                if t.typ == Semicolon && self.check(&[
+                    Class,
+                    Fun,
+                    Var,
+                    For,
+                    If,
+                    While,
+                    Print,
+                    Return,
+                ]) {
+                    return
+                }
             }
         }
-
-        Ok(())
     }
 
     fn eof() -> Box<StdError> {
@@ -154,6 +259,22 @@ impl<'a> Parser<'a> {
     }
 
     fn unexpected(tkn: &Token) -> Box<StdError> {
-        Error::Parse(tkn.line, "unexpected token".to_string(), tkn.lexeme.clone()).boxed()
+        let lex = match tkn.typ {
+            EOF => "EOF".to_string(),
+            _ => tkn.lexeme.clone(),
+        };
+
+        Error::Parse(tkn.line, "unexpected token".to_string(), lex).boxed()
+    }
+}
+
+/// Describes a type that can be converted into a Parser.
+pub trait StmtIterator<'a> {
+    fn statements(self) -> Parser<'a>;
+}
+
+impl<'a> StmtIterator<'a> for Scanner<'a> {
+    fn statements(self) -> Parser<'a> {
+        Parser::new(self)
     }
 }

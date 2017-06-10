@@ -1,25 +1,33 @@
 use token;
-use ast::{Visitor, Node, Printer};
-use std::fmt::{Debug, Formatter, Result};
+use Boxer;
 
 /// An Expression Node
 ///
 /// All `Expr` types can be evaluated to a `Literal`.
+
+#[derive(Debug)]
 pub enum Expr {
+    Identifier(String),
     Literal(token::Literal),
     Grouping(Box<Expr>),
     Unary(token::Token, Box<Expr>),
     Binary(Box<Expr>, token::Token, Box<Expr>),
+    Assignment(String, Box<Expr>),
 }
 
-impl Node for Expr {
-    fn accept<T>(&self, v: &mut Visitor<T>) -> T {
-        v.visit_expr(self)
-    }
+/// Implements the visitor pattern
+///
+/// An implementor of Visitor<T> should recursively walk
+/// a `Expr` and returns `T`.
+pub trait Visitor<T> {
+    /// Visit an expression
+    fn visit_expr(&mut self, e: &Expr) -> T;
 }
 
-impl Debug for Expr {
-    fn fmt(&self, f: &mut Formatter) -> Result {
-        write!(f, "{}", Printer{}.visit_expr(self))
-    }
+impl Expr {
+    pub fn accept<T>(&self, v: &mut Visitor<T>) -> T { v.visit_expr(self) }
+}
+
+impl Boxer for Expr {
+    fn boxed(self) -> Box<Self> { Box::new(self) }
 }

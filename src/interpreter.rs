@@ -1,30 +1,84 @@
 use std::ops::Deref;
 use std::cmp::PartialOrd;
 
-use ast::{Visitor, Expr, Node};
+use ast::expr::{Expr, Visitor as ExprVisitor};
+use ast::stmt::{Stmt, Visitor as StmtVisitor};
 use result::{Result, Error};
 use token::{Token, Literal};
+use env::Env;
+use std::rc::Rc;
 
-pub struct Interpreter;
-
-impl Interpreter {
-    pub fn run<T: Node>(n: &T) -> Result<Literal> { n.accept(&mut Interpreter {}) }
+#[derive(Default)]
+pub struct Interpreter {
+    env: Rc<Env>,
+    repl: bool,
 }
 
-impl Visitor<Result<Literal>> for Interpreter {
+impl Interpreter {
+    pub fn new(repl: bool) -> Self { Interpreter { env: Env::new(None), repl: repl } }
+    pub fn interpret(&mut self, s: &Stmt) -> Result<()> { s.accept(self) }
+
+    fn scoped(&self) -> Self { Interpreter { env: Env::new(Some(self.env.clone())), repl: self.repl } }
+}
+
+impl ExprVisitor<Result<Literal>> for Interpreter {
     fn visit_expr(&mut self, e: &Expr) -> Result<Literal> {
-        use ast::Expr::*;
-        use ast::Expr::Literal as ExprLit;
+        use ast::expr::Expr::*;
+        use ast::expr::Expr::Literal as ExprLit;
 
         match *e {
+            Identifier(ref id) => self.visit_ident(id.to_owned()),
             ExprLit(ref l) => Ok(l.clone()),
             Grouping(ref b) => self.evaluate(b),
             Unary(ref op, ref r) => self.visit_unary(op, r),
             Binary(ref l, ref op, ref r) => self.visit_binary(l, op, r),
+            Assignment(ref id, ref r) => self.visit_assignment(id.to_owned(), r),
         }
     }
 }
 
+impl StmtVisitor<Result<()>> for Interpreter {
+    fn visit_stmt(&mut self, s: &Stmt) -> Result<()> {
+        use ast::stmt::Stmt::*;
+
+        match *s {
+            Empty => Ok(()),
+            Print(ref e) => self.visit_print_stmt(e),
+            Expression(ref e) => self.visit_expr_stmt(e),
+            Declaration(ref n, ref e) => self.visit_decl(n.to_owned(), e.as_ref()),
+            Block(ref stmts) => self.visit_block(stmts),
+        }
+    }
+}
+
+// Private, expression-related methods
+impl Interpreter {
+    fn visit_expr_stmt(&mut self, e: &Expr) -> Result<()> {
+        if self.repl {
+            self.visit_print_stmt(e)
+        } else {
+            e.accept(self).map(|_| ())
+        }
+    }
+
+    fn visit_print_stmt(&mut self, e: &Expr) -> Result<()> {
+        println!("{}", e.accept(self)?);
+        Ok(())
+    }
+
+    fn visit_decl(&mut self, name: String, init: Option<&Expr>) -> Result<()> {
+        let val: Literal = init.map_or_else(|| Ok(Literal::Nil), |e| e.accept(self))?;
+        self.env.define(&name, val)
+    }
+
+    fn visit_block(&mut self, stmts: &[Stmt]) -> Result<()> {
+        let mut scope: Self = self.scoped();
+        for stmt in stmts { stmt.accept(&mut scope)?; }
+        Ok(())
+    }
+}
+
+// Private, expression-related methods
 impl Interpreter {
     fn evaluate(&mut self, b: &Box<Expr>) -> Result<Literal> { b.deref().accept(self) }
 
@@ -89,6 +143,17 @@ impl Interpreter {
         }
     }
 
+    fn visit_ident(&mut self, n: String) -> Result<Literal> {
+        self.env.get(&n).map(|lit| lit.clone())
+    }
+
+    fn visit_assignment(&mut self, n: String, rhs: &Box<Expr>) -> Result<Literal> {
+        let val = self.evaluate(rhs)?;
+        self.env.assign(&n, val).map(|lit| lit.clone())
+    }
+}
+
+impl Interpreter {
     fn err_op(&self, msg: &str, op: &Token) -> Result<Literal> {
         let e = Error::Runtime(
             op.line,

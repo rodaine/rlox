@@ -1,14 +1,16 @@
+#![allow(dead_code)]
 extern crate rlox;
 
 use std::env;
 use std::fs::File;
 use std::io::prelude::*;
 use std::io;
+use std::io::stderr;
 use std::process::exit;
 
 use rlox::{Result, Error};
 use rlox::scanner::TokenIterator;
-use rlox::parser::Parser;
+use rlox::parser::StmtIterator;
 use rlox::interpreter::Interpreter;
 
 fn main() {
@@ -23,7 +25,7 @@ fn main() {
     match res {
         Ok(_) => exit(0),
         Err(e) => {
-            println!("{}", e);
+            writeln!(&mut stderr(), "{}", e).expect("problem writing to stderr");
             exit(1);
         }
     }
@@ -36,7 +38,7 @@ fn main() {
 fn run_file(f: &str) -> Result<()> {
     let mut buf = String::new();
     { File::open(f)?.read_to_string(&mut buf)?; }
-    run(&buf).map(|_| ())
+    run(&mut Interpreter::new(false), &buf).map(|_| ())
 }
 
 /// Runs an interactive prompt (REPL)
@@ -44,18 +46,24 @@ fn run_file(f: &str) -> Result<()> {
 /// Each line is executed independently. Use ctrl+c to exit.
 fn run_prompt() -> Result<()> {
     let mut buf = String::new();
+    let mut i = Interpreter::new(true);
+
+    println!("RLOX : Press ctrl+c to exit");
     loop {
         print!("> ");
-        io::stdout().flush().unwrap();
+        io::stdout().flush()?;
         io::stdin().read_line(&mut buf)?;
-        if let Err(e) = run(&buf) { println!("{}", e); }
+        if let Err(e) = run(&mut i, &format!("{};", buf)) { println!("{}", e); }
         buf.clear()
     }
 }
 
-fn run(buf: &str) -> Result<()> {
-    let expr = Parser::new(buf.chars().tokens()).parse()?;
-    let out = Interpreter::run(&expr)?;
-    println!("{}", out);
+fn run(i : &mut Interpreter, buf: &str) -> Result<()> {
+    for res in buf.chars().tokens().statements() {
+        match res {
+            Err(e) => writeln!(&mut stderr(), "{}", e)?,
+            Ok(stmt) => i.interpret(&stmt)?,
+        }
+    }
     Ok(())
 }
