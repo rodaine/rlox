@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 extern crate rlox;
 
 use std::env;
@@ -19,7 +18,7 @@ fn main() {
     let res: Result<()> = match args.len() {
         1 => run_prompt(),         // REPL if no script file
         2 => run_file(&args[1]),   // Interpret a file otherwise
-        _ => Err(Error::Usage.boxed()), // Print usage
+        _ => Err(Error::Usage), // Print usage
     };
 
     match res {

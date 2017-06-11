@@ -24,7 +24,7 @@ impl Env {
         if vals.contains_key(name) {
             return Err(Error::Runtime(0,
                                       format!("variable `{}` already defined", name),
-                                      "".to_string()).boxed())
+                                      "".to_string()))
         }
 
         let _ = vals.insert(name.to_owned(), val);
@@ -41,7 +41,7 @@ impl Env {
 
             return Err(Error::Runtime(0,
                                       format!("variable `{}` is undefined", name),
-                                      "".to_string()).boxed())
+                                      "".to_string()))
         }
 
         let _ = vals.insert(name.to_owned(), val.clone());
@@ -58,7 +58,7 @@ impl Env {
 
             return Err(Error::Runtime(0,
                                       format!("variable `{}` is undefined", name),
-                                      "".to_string()).boxed())
+                                      "".to_string()))
         }
 
         Ok(vals.get(name).cloned().unwrap())

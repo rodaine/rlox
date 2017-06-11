@@ -1,7 +1,4 @@
-#![allow(dead_code)]
-
 use std::iter::Peekable;
-use std::error::Error as StdError;
 
 use ast::expr::Expr;
 use ast::stmt::Stmt;
@@ -88,7 +85,7 @@ impl<'a> Parser<'a> {
     }
 
     fn block_statement(&mut self) -> Result<Stmt> {
-        let mut stmts : Vec<Stmt> = Vec::new();
+        let mut stmts: Vec<Stmt> = Vec::new();
 
         while self.check_next(&[RightBrace]).is_none() && !self.src.peek().is_none() {
             stmts.push(self.statement()?);
@@ -208,7 +205,7 @@ impl<'a> Parser<'a> {
         Err(self.peek_err())
     }
 
-    fn peek_err(&mut self) -> Box<StdError> {
+    fn peek_err(&mut self) -> Error {
         {
             // peek for EOF and unexpected tokens
             let pk: Option<&Result<Token>> = self.src.peek();
@@ -226,7 +223,6 @@ impl<'a> Parser<'a> {
         self.src.next().unwrap().unwrap_err()
     }
 
-    #[cfg_attr(feature = "cargo-clippy", allow(while_let_on_iterator))]
     fn synchronize(&mut self) {
         loop {
             if let Some(&Err(_)) = self.src.peek() {
@@ -254,17 +250,17 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn eof() -> Box<StdError> {
-        Error::Parse(0, "".to_string(), "unexpected EOF".to_string()).boxed()
+    fn eof() -> Error {
+        Error::Parse(0, "".to_string(), "unexpected EOF".to_string())
     }
 
-    fn unexpected(tkn: &Token) -> Box<StdError> {
+    fn unexpected(tkn: &Token) -> Error {
         let lex = match tkn.typ {
             EOF => "EOF".to_string(),
             _ => tkn.lexeme.clone(),
         };
 
-        Error::Parse(tkn.line, "unexpected token".to_string(), lex).boxed()
+        Error::Parse(tkn.line, "unexpected token".to_string(), lex)
     }
 }
 
