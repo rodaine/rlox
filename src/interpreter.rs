@@ -155,22 +155,18 @@ impl Interpreter {
 
 impl Interpreter {
     fn err_op(&self, msg: &str, op: &Token) -> Result<Literal> {
-        let e = Error::Runtime(
+        Err(Error::Runtime(
             op.line,
             msg.to_string(),
             op.lexeme.clone(),
-        );
-
-        Err(e.boxed())
+        ))
     }
 
     fn err_near(&self, msg: &str, op: &Token, near: String) -> Result<Literal> {
-        let e = Error::Runtime(
+        Err(Error::Runtime(
             op.line,
             msg.to_string(),
             near,
-        );
-
-        Err(e.boxed())
+        ))
     }
 }

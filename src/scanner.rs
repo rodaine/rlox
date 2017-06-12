@@ -138,7 +138,7 @@ impl<'a> Scanner<'a> {
     }
 
     fn err(&self, msg: &str) -> Option<Result<Token>> {
-        Some(Err(Error::Lexical(self.line, msg.to_string(), self.lexeme.clone()).boxed()))
+        Some(Err(Error::Lexical(self.line, msg.to_string(), self.lexeme.clone())))
     }
 
     fn match_static_token(&mut self, c: char, m: Type, u: Type) -> Option<Result<Token>> {

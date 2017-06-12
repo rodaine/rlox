@@ -6,7 +6,7 @@ use std::fmt;
 use std::io;
 
 /// A Lox-Specific Result Type
-pub type Result<T> = result::Result<T, Box<error::Error>>;
+pub type Result<T> = result::Result<T, Error>;
 
 /// A Lox-Specific Error
 #[derive(Debug)]
@@ -21,24 +21,6 @@ pub enum Error {
     Parse(u64, String, String),
     /// Returned if there is an error at runtime
     Runtime(u64, String, String),
-}
-
-impl Error {
-    /// Returns a boxed version of this error, useful for creating a valid Result
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # extern crate rlox;
-    /// # use rlox::*;
-    /// # use rlox::Error::*;
-    /// # fn main() {
-    /// let res : Result<()> = Err(Usage.boxed());
-    /// # }
-    /// ```
-    pub fn boxed(self) -> Box<error::Error> {
-        Box::new(self)
-    }
 }
 
 impl From<io::Error> for Error {
