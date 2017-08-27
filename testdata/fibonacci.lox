@@ -1,0 +1,19 @@
+var a = 0;
+var b = 1;
+
+while (a < 10000) {
+  print a;
+  var temp = a;
+  a = b;
+  b = temp + b;
+}
+
+var c = 0;
+var d = 1;
+
+for (; c < 10000;) {
+  print c;
+  var temp = c;
+  c = d;
+  d = temp + d;
+}

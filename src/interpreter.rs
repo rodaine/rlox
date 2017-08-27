@@ -18,7 +18,12 @@ impl Interpreter {
     pub fn new(repl: bool) -> Self { Interpreter { env: Env::new(None), repl: repl } }
     pub fn interpret(&mut self, s: &Stmt) -> Result<()> { s.accept(self) }
 
-    fn scoped(&self) -> Self { Interpreter { env: Env::new(Some(self.env.clone())), repl: self.repl } }
+    fn scoped(&self) -> Self {
+        Interpreter {
+            env: Env::new(Some(self.env.clone())),
+            repl: false,
+        }
+    }
 }
 
 impl ExprVisitor<Result<Literal>> for Interpreter {
@@ -29,7 +34,7 @@ impl ExprVisitor<Result<Literal>> for Interpreter {
         match *e {
             Identifier(ref id) => self.visit_ident(id.to_owned()),
             ExprLit(ref l) => Ok(l.clone()),
-            Grouping(ref b) => self.evaluate(b),
+            Grouping(ref b) => self.evaluate(b.deref()),
             Unary(ref op, ref r) => self.visit_unary(op, r),
             Binary(ref l, ref op, ref r) => self.visit_binary(l, op, r),
             Assignment(ref id, ref r) => self.visit_assignment(id.to_owned(), r),
@@ -47,6 +52,9 @@ impl StmtVisitor<Result<()>> for Interpreter {
             Expression(ref e) => self.visit_expr_stmt(e),
             Declaration(ref n, ref e) => self.visit_decl(n.to_owned(), e.as_ref()),
             Block(ref stmts) => self.visit_block(stmts),
+            If(ref c, ref t, ref e) => self.visit_if(c, t.as_ref(), e.as_ref().map(|x| x.deref())),
+            While(ref e, ref b) => self.visit_while(e, b.deref()),
+            Break(l) => self.visit_break(l),
         }
     }
 }
@@ -76,13 +84,43 @@ impl Interpreter {
         for stmt in stmts { stmt.accept(&mut scope)?; }
         Ok(())
     }
+
+    fn visit_if(&mut self, expr: &Expr, then_stmt: &Stmt, else_stmt: Option<&Stmt>) -> Result<()> {
+        let cond: Literal = expr.accept(self)?;
+
+        if cond.is_truthy() {
+            return then_stmt.accept(self);
+        }
+
+        if else_stmt.is_none() {
+            Ok(())
+        } else {
+            else_stmt.unwrap().deref().accept(self)
+        }
+    }
+
+    fn visit_while(&mut self, expr: &Expr, body: &Stmt) -> Result<()> {
+        while self.evaluate(expr)?.is_truthy() {
+            match body.accept(self) {
+                Err(Error::Break(_)) => break,
+                Err(e) => return Err(e),
+                Ok(_) => (),
+            };
+        }
+
+        Ok(())
+    }
+
+    fn visit_break(&mut self, line: u64) -> Result<()> {
+        Err(Error::Break(line))
+    }
 }
 
 // Private, expression-related methods
 impl Interpreter {
-    fn evaluate(&mut self, b: &Box<Expr>) -> Result<Literal> { b.deref().accept(self) }
+    fn evaluate(&mut self, b: &Expr) -> Result<Literal> { b.accept(self) }
 
-    fn visit_unary(&mut self, op: &Token, rhs: &Box<Expr>) -> Result<Literal> {
+    fn visit_unary(&mut self, op: &Token, rhs: &Expr) -> Result<Literal> {
         use token::Type::{Minus, Bang};
         use token::Literal::*;
 
@@ -93,36 +131,35 @@ impl Interpreter {
                 Literal::Number(n) => Ok(Literal::Number(-n)),
                 _ => self.err_near("cannot negate non-numeric", op, format!("{:?}", r)),
             },
-            Bang => Ok(Boolean(match r {
-                Nil => false,
-                String(ref s) => !s.is_empty(),
-                Boolean(b) => b,
-                Number(n) => n > 0.0,
-            })),
+            Bang => Ok(Boolean(!r.is_truthy())),
             _ => self.err_op("erroneous unary operator", op),
         }
     }
 
-    fn visit_binary(&mut self, lhs: &Box<Expr>, op: &Token, rhs: &Box<Expr>) -> Result<Literal> {
-        use token::Type::{Plus, Minus, Star, Slash, Greater, GreaterEqual, Less, LessEqual, EqualEqual, BangEqual};
+    fn visit_binary(&mut self, lhs: &Expr, op: &Token, rhs: &Expr) -> Result<Literal> {
+        use token::Type::{Plus, Minus, Star, Slash, Greater, GreaterEqual, Less, LessEqual, EqualEqual, BangEqual, Or, And};
         use std::cmp::Ordering as Ord;
         use token::Literal::*;
+
+        if op.in_types(&[Or, And]) {
+            return self.visit_logical(lhs, op, rhs);
+        }
 
         let l: Literal = self.evaluate(lhs)?;
         let r: Literal = self.evaluate(rhs)?;
 
         match op.typ {
-            Plus => match (l, r) {
+            Plus => match (self.evaluate(lhs)?, self.evaluate(rhs)?) {
                 (Number(ln), Number(rn)) => Ok(Number(ln + rn)),
                 (String(ln), r) => Ok(String(format!("{}{}", ln, r))),
                 (l, String(rn)) => Ok(String(format!("{}{}", l, rn))),
                 (l, r) => self.err_near("cannot add mixed types", op, format!("{:?} + {:?}", l, r)),
             },
-            Minus => match (l, r) {
+            Minus => match (self.evaluate(lhs)?, self.evaluate(rhs)?) {
                 (Number(ln), Number(rn)) => Ok(Number(ln - rn)),
                 (l, r) => self.err_near("cannot subtract non-numerics", op, format!("{:?} - {:?}", l, r)),
             },
-            Star => match (l, r) {
+            Star => match (self.evaluate(lhs)?, self.evaluate(rhs)?) {
                 (Number(ln), Number(rn)) => Ok(Number(ln * rn)),
                 (l, r) => self.err_near("cannot multiply non-numerics", op, format!("{:?} * {:?}", l, r)),
             },
@@ -143,11 +180,25 @@ impl Interpreter {
         }
     }
 
+    fn visit_logical(&mut self, lhs: &Expr, op: &Token, rhs: &Expr) -> Result<Literal> {
+        use token::Type::{Or, And};
+        use token::Literal::Boolean;
+
+        let l: Literal = self.evaluate(lhs)?;
+
+        match op.typ {
+            And if l.is_truthy() => Ok(Boolean(self.evaluate(rhs)?.is_truthy())),
+            Or if l.is_truthy() => Ok(Boolean(true)),
+            Or => Ok(Boolean(self.evaluate(rhs)?.is_truthy())),
+            _ => Ok(Boolean(false)),
+        }
+    }
+
     fn visit_ident(&mut self, n: String) -> Result<Literal> {
         self.env.get(&n).map(|lit| lit.clone())
     }
 
-    fn visit_assignment(&mut self, n: String, rhs: &Box<Expr>) -> Result<Literal> {
+    fn visit_assignment(&mut self, n: String, rhs: &Expr) -> Result<Literal> {
         let val = self.evaluate(rhs)?;
         self.env.assign(&n, val).map(|lit| lit.clone())
     }

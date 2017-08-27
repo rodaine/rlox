@@ -1,13 +1,17 @@
 use ast::expr::Expr;
 use std::vec::Vec;
+use Boxer;
 
 #[derive(Debug)]
 pub enum Stmt {
     Empty,
+    Break(u64),
     Expression(Expr),
     Print(Expr),
     Declaration(String, Option<Expr>),
     Block(Vec<Stmt>),
+    If(Expr, Box<Stmt>, Option<Box<Stmt>>),
+    While(Expr, Box<Stmt>),
 }
 
 pub trait Visitor<T> {
@@ -17,4 +21,8 @@ pub trait Visitor<T> {
 
 impl Stmt {
     pub fn accept<T>(&self, v: &mut Visitor<T>) -> T { v.visit_stmt(self) }
+}
+
+impl Boxer for Stmt {
+    fn boxed(self) -> Box<Self> { Box::new(self) }
 }

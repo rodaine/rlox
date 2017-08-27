@@ -53,6 +53,19 @@ pub enum Literal {
     String(String),
 }
 
+impl Literal {
+    pub fn is_truthy(&self) -> bool {
+        use token::Literal::*;
+
+        match *self {
+            Nil => false,
+            Boolean(tf) => tf,
+            Number(n) => n != 0.0,
+            String(ref s) => !s.is_empty(),
+        }
+    }
+}
+
 impl PartialOrd for Literal {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         use std::cmp::Ordering::*;
@@ -121,6 +134,7 @@ pub enum Type {
     True,
     Var,
     While,
+    Break,
     EOF,
 }
 
@@ -162,5 +176,6 @@ lazy_static! {
         ("true", Type::True),
         ("var", Type::Var),
         ("while", Type::While),
+        ("break", Type::Break),
     ].iter().cloned().collect();
 }
