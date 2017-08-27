@@ -3,12 +3,16 @@ extern crate lazy_static;
 
 mod result;
 
-pub mod scanner;
 pub mod token;
 pub mod ast;
+
+pub mod functions;
+pub mod object;
+pub mod env;
+
+pub mod scanner;
 pub mod parser;
 pub mod interpreter;
-pub mod env;
 
 pub use result::{Result, Error};
 

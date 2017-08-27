@@ -1,5 +1,6 @@
 use ast::expr::Expr;
 use std::vec::Vec;
+use std::rc::Rc;
 use Boxer;
 
 #[derive(Debug)]
@@ -12,6 +13,8 @@ pub enum Stmt {
     Block(Vec<Stmt>),
     If(Expr, Box<Stmt>, Option<Box<Stmt>>),
     While(Expr, Box<Stmt>),
+    Function(String, Vec<String>, Rc<Stmt>),
+    Return(u64, Expr),
 }
 
 pub trait Visitor<T> {

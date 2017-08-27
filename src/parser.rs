@@ -7,6 +7,8 @@ use result::{Result, Error};
 use scanner::Scanner;
 use token::{Type, Token, Literal};
 use token::Type::*;
+use std::string::String as stdString;
+use std::rc::Rc;
 
 pub struct Parser<'a> {
     src: Peekable<Scanner<'a>>,
@@ -44,6 +46,8 @@ impl<'a> Parser<'a> {
             While,
             For,
             Break,
+            Fun,
+            Return,
         ]);
 
         if n.is_none() {
@@ -61,6 +65,8 @@ impl<'a> Parser<'a> {
             While => self.while_statement(),
             For => self.for_statement(),
             Break => self.break_statement(),
+            Fun => self.function(),
+            Return => self.return_statement(),
             _ => unreachable!(),
         }
     }
@@ -115,13 +121,12 @@ impl<'a> Parser<'a> {
             }
         };
 
-        let inc: Option<Stmt> = match self.check_next(&[RightParen]) {
-            None => Some(self.expr_statement()?),
-            Some(t) => {
-                t?;
-                None
-            }
+        let inc: Option<Stmt> = if self.check(&[RightParen]) {
+            None
+        } else {
+            Some(Stmt::Expression(self.expression()?))
         };
+        self.must_next(&[RightParen])?;
 
         let mut body: Stmt = self.statement()?;
 
@@ -139,7 +144,7 @@ impl<'a> Parser<'a> {
     }
 
     fn break_statement(&mut self) -> Result<Stmt> {
-        let t : Token = self.must_next(&[Semicolon])?;
+        let t: Token = self.must_next(&[Semicolon])?;
         Ok(Stmt::Break(t.line))
     }
 
@@ -171,6 +176,51 @@ impl<'a> Parser<'a> {
         }
 
         Ok(Stmt::Block(stmts))
+    }
+
+    fn function(&mut self) -> Result<Stmt> {
+        let name: Token = self.must_next(&[Identifier])?;
+        self.must_next(&[LeftParen])?;
+
+        let mut params: Vec<stdString> = Vec::new();
+
+        if !self.check(&[RightParen]) {
+            loop {
+                if params.len() >= 8 {
+                    return Err(Error::Parse(name.line,
+                                            "cannot have more than 8 arguments".to_string(),
+                                            name.lexeme));
+                }
+
+                params.push(self.must_next(&[Identifier])?.lexeme);
+
+                if self.check_next(&[Comma]).is_none() {
+                    break;
+                }
+            }
+        }
+
+        self.must_next(&[RightParen])?;
+        self.must_next(&[LeftBrace])?;
+
+        Ok(Stmt::Function(name.lexeme, params, Rc::new(self.block_statement()?)))
+    }
+
+    fn return_statement(&mut self) -> Result<Stmt> {
+        let ln : u64 = match self.src.peek() {
+            Some(res) => res.as_ref().map(|t| t.line).unwrap_or(0),
+            None => 0,
+        };
+
+        let expr : Expr = if self.check(&[Semicolon]) {
+            Expr::Literal(Literal::Nil)
+        } else {
+            self.expression()?
+        };
+
+        self.must_next(&[Semicolon])?;
+
+        Ok(Stmt::Return(ln, expr))
     }
 }
 
@@ -258,7 +308,47 @@ impl<'a> Parser<'a> {
             return Ok(Expr::Unary(op?, self.unary()?.boxed()));
         }
 
-        self.primary()
+        self.call()
+    }
+
+    fn call(&mut self) -> Result<Expr> {
+        let mut expr = self.primary()?;
+
+        loop {
+            expr = match self.check_next(&[LeftParen]) {
+                Some(Err(e)) => return Err(e),
+                Some(Ok(_)) => self.finish_call(expr)?,
+                _ => break,
+            };
+        }
+
+        Ok(expr)
+    }
+
+    fn finish_call(&mut self, callee: Expr) -> Result<Expr> {
+        let mut args: Vec<Expr> = Vec::new();
+
+        if !self.check(&[RightParen]) {
+            loop {
+                if args.len() >= 8 {
+                    return Err(Error::Parse(0,
+                                            "cannot have more than 8 arguments".to_string(),
+                                            "".to_string()));
+                }
+
+                args.push(self.expression()?);
+
+                match self.check_next(&[Comma]) {
+                    Some(r) => r?,
+                    None => break,
+                };
+            }
+        }
+
+        Ok(Expr::Call(
+            callee.boxed(),
+            self.must_next(&[RightParen])?,
+            args))
     }
 
     fn primary(&mut self) -> Result<Expr> {

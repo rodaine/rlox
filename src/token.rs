@@ -3,7 +3,6 @@
 use std::fmt;
 use std::default;
 use std::collections::{HashMap, HashSet};
-use std::cmp::Ordering;
 
 /// A Token read from source.
 ///
@@ -51,33 +50,6 @@ pub enum Literal {
     Boolean(bool),
     Number(f64),
     String(String),
-}
-
-impl Literal {
-    pub fn is_truthy(&self) -> bool {
-        use token::Literal::*;
-
-        match *self {
-            Nil => false,
-            Boolean(tf) => tf,
-            Number(n) => n != 0.0,
-            String(ref s) => !s.is_empty(),
-        }
-    }
-}
-
-impl PartialOrd for Literal {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        use std::cmp::Ordering::*;
-        use token::Literal::*;
-
-        match (self, other) {
-            (&Nil, &Nil) => Some(Equal),
-            (&Number(l), &Number(r)) => l.partial_cmp(&r),
-            (&String(ref l), &String(ref r)) => l.partial_cmp(r),
-            _ => None,
-        }
-    }
 }
 
 impl fmt::Display for Literal {

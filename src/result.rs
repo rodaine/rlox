@@ -1,5 +1,7 @@
 //! A module describing Lox-specific Result and Error types
 
+use object::Object;
+
 use std::result;
 use std::error;
 use std::fmt;
@@ -23,25 +25,9 @@ pub enum Error {
     Runtime(u64, String, String),
     /// Sentinel error for break statements
     Break(u64),
+    /// Sentinel error for return statements
+    Return(u64, Object),
 }
-
-//impl Error {
-//    /// Returns a boxed version of this error, useful for creating a valid Result
-//    ///
-//    /// # Examples
-//    ///
-//    /// ```
-//    /// # extern crate rlox;
-//    /// # use rlox::*;
-//    /// # use rlox::Error::*;
-//    /// # fn main() {
-//    /// let res : Result<()> = Err(Usage.boxed());
-//    /// # }
-//    /// ```
-//    pub fn boxed(self) -> Box<error::Error> {
-//        Box::new(self)
-//    }
-//}
 
 impl From<io::Error> for Error {
     fn from(err: io::Error) -> Error {
@@ -62,6 +48,8 @@ impl fmt::Display for Error {
                 write!(f, "Runtime Error [line {}] {}: near {}", line, msg, &near),
             Error::Break(ref line) =>
                 write!(f, "Runtime Error [line {}] unexpected break statement", line),
+            Error::Return(ref line, _) =>
+                write!(f, "Runtime Error [line {}] unexpected return statement", line),
         }
     }
 }
@@ -75,6 +63,7 @@ impl error::Error for Error {
             Error::Parse(_, _, _) => "parse error",
             Error::Runtime(_, _, _) => "runtime error",
             Error::Break(_) => "break error",
+            Error::Return(_, _) => "return error",
         }
     }
 
