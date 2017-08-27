@@ -5,9 +5,8 @@ use ast::stmt::Stmt;
 use Boxer;
 use result::{Result, Error};
 use scanner::Scanner;
-use token::{Type, Token};
+use token::{Type, Token, Literal};
 use token::Type::*;
-
 
 pub struct Parser<'a> {
     src: Peekable<Scanner<'a>>,
@@ -23,7 +22,7 @@ impl<'a> Iterator for Parser<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.src.peek().is_none() || self.check_next(&[Type::EOF]).is_some() {
-            return None
+            return None;
         }
 
         let res = self.statement();
@@ -41,6 +40,10 @@ impl<'a> Parser<'a> {
             Print,
             Var,
             LeftBrace,
+            If,
+            While,
+            For,
+            Break,
         ]);
 
         if n.is_none() {
@@ -54,7 +57,11 @@ impl<'a> Parser<'a> {
             Print => self.print_statement(),
             Var => self.decl_statement(),
             LeftBrace => self.block_statement(),
-            _ => Err(Parser::unexpected(&tkn)),
+            If => self.if_statement(),
+            While => self.while_statement(),
+            For => self.for_statement(),
+            Break => self.break_statement(),
+            _ => unreachable!(),
         }
     }
 
@@ -62,6 +69,78 @@ impl<'a> Parser<'a> {
         let expr: Expr = self.expression()?;
         self.must_next(&[Semicolon])?;
         Ok(Stmt::Print(expr))
+    }
+
+    fn if_statement(&mut self) -> Result<Stmt> {
+        self.must_next(&[LeftParen])?;
+        let expr: Expr = self.expression()?;
+        self.must_next(&[RightParen])?;
+
+        let then_stmt: Box<Stmt> = self.statement()?.boxed();
+
+        match self.check_next(&[Else]) {
+            Some(Err(e)) => Err(e),
+            Some(Ok(_)) => Ok(Stmt::If(expr, then_stmt, Some(self.statement()?.boxed()))),
+            None => Ok(Stmt::If(expr, then_stmt, None)),
+        }
+    }
+
+    fn while_statement(&mut self) -> Result<Stmt> {
+        let expr: Expr = self.expression()?;
+        let body: Box<Stmt> = self.statement()?.boxed();
+        Ok(Stmt::While(expr, body))
+    }
+
+    fn for_statement(&mut self) -> Result<Stmt> {
+        self.must_next(&[LeftParen])?;
+
+        let init: Option<Stmt> = match self.check_next(&[Semicolon, Var]) {
+            None => Some(self.expr_statement()?),
+            Some(t) => match t?.typ {
+                Var => Some(self.decl_statement()?),
+                Semicolon => None,
+                _ => unreachable!(),
+            }
+        };
+
+        let cond: Expr = match self.check_next(&[Semicolon]) {
+            None => {
+                let expr = self.expression()?;
+                self.must_next(&[Semicolon])?;
+                expr
+            }
+            Some(t) => match t?.typ {
+                Semicolon => Expr::Literal(Literal::Boolean(true)),
+                _ => unreachable!(),
+            }
+        };
+
+        let inc: Option<Stmt> = match self.check_next(&[RightParen]) {
+            None => Some(self.expr_statement()?),
+            Some(t) => {
+                t?;
+                None
+            }
+        };
+
+        let mut body: Stmt = self.statement()?;
+
+        if inc.is_some() {
+            body = Stmt::Block(vec![body, inc.unwrap()]);
+        }
+
+        body = Stmt::While(cond, body.boxed());
+
+        if init.is_some() {
+            body = Stmt::Block(vec![init.unwrap(), body])
+        }
+
+        Ok(body)
+    }
+
+    fn break_statement(&mut self) -> Result<Stmt> {
+        let t : Token = self.must_next(&[Semicolon])?;
+        Ok(Stmt::Break(t.line))
     }
 
     fn expr_statement(&mut self) -> Result<Stmt> {
@@ -100,7 +179,7 @@ impl<'a> Parser<'a> {
     fn expression(&mut self) -> Result<Expr> { self.assignment() }
 
     fn assignment(&mut self) -> Result<Expr> {
-        let expr: Expr = self.equality()?;
+        let expr: Expr = self.logical_or()?;
 
         if let Some(res) = self.check_next(&[Equal]) {
             let eq: Token = res?;
@@ -108,7 +187,27 @@ impl<'a> Parser<'a> {
             return match expr {
                 Expr::Identifier(id) => Ok(Expr::Assignment(id, self.assignment()?.boxed())),
                 _ => Err(Parser::unexpected(&eq)),
-            }
+            };
+        }
+
+        Ok(expr)
+    }
+
+    fn logical_or(&mut self) -> Result<Expr> {
+        let mut expr: Expr = self.logical_and()?;
+
+        while let Some(op) = self.check_next(&[Or]) {
+            expr = Expr::Binary(expr.boxed(), op?, self.logical_and()?.boxed());
+        }
+
+        Ok(expr)
+    }
+
+    fn logical_and(&mut self) -> Result<Expr> {
+        let mut expr: Expr = self.equality()?;
+
+        while let Some(op) = self.check_next(&[And]) {
+            expr = Expr::Binary(expr.boxed(), op?, self.equality()?.boxed());
         }
 
         Ok(expr)
@@ -156,7 +255,7 @@ impl<'a> Parser<'a> {
 
     fn unary(&mut self) -> Result<Expr> {
         if let Some(op) = self.check_next(&[Bang, Minus]) {
-            return Ok(Expr::Unary(op?, self.unary()?.boxed()))
+            return Ok(Expr::Unary(op?, self.unary()?.boxed()));
         }
 
         self.primary()
@@ -168,13 +267,13 @@ impl<'a> Parser<'a> {
                 Identifier => Ok(Expr::Identifier(tkn.lexeme.clone())),
                 Nil | True | False | Number | String => Ok(Expr::Literal(tkn.literal.unwrap())),
                 _ => Err(Parser::unexpected(&tkn)),
-            }
+            };
         }
 
         if let Some(Ok(_)) = self.check_next(&[LeftParen]) {
             let expr = self.expression()?;
             let _ = self.must_next(&[RightParen])?;
-            return Ok(Expr::Grouping(expr.boxed()))
+            return Ok(Expr::Grouping(expr.boxed()));
         }
 
         Err(self.peek_err())
@@ -192,14 +291,14 @@ impl<'a> Parser<'a> {
 
     fn check_next(&mut self, types: &[Type]) -> Option<Result<Token>> {
         if self.check(types) {
-            return self.src.next()
+            return self.src.next();
         }
         None
     }
 
     fn must_next(&mut self, types: &[Type]) -> Result<Token> {
         if let Some(res) = self.check_next(types) {
-            return res
+            return res;
         }
 
         Err(self.peek_err())
@@ -211,11 +310,11 @@ impl<'a> Parser<'a> {
             let pk: Option<&Result<Token>> = self.src.peek();
 
             if pk.is_none() {
-                return Parser::eof()
+                return Parser::eof();
             }
 
             if let Ok(tkn) = pk.unwrap().as_ref() {
-                return Parser::unexpected(tkn)
+                return Parser::unexpected(tkn);
             }
         }
 
@@ -226,12 +325,12 @@ impl<'a> Parser<'a> {
     fn synchronize(&mut self) {
         loop {
             if let Some(&Err(_)) = self.src.peek() {
-                return
+                return;
             }
 
             let tkn: Option<Result<Token>> = self.src.next();
 
-            if tkn.is_none() { return }
+            if tkn.is_none() { return; }
 
             if let Some(Ok(t)) = tkn {
                 if t.typ == Semicolon && self.check(&[
@@ -244,7 +343,7 @@ impl<'a> Parser<'a> {
                     Print,
                     Return,
                 ]) {
-                    return
+                    return;
                 }
             }
         }
