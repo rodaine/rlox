@@ -1,0 +1,18 @@
+fun makeCounter() {
+  var i = 0;
+
+  fun count() {
+    i = i + 1;
+    return i;
+  }
+
+  return count;
+}
+
+var counter = makeCounter();
+print counter();
+print counter();
+
+var counter2 = makeCounter();
+print counter2();
+print counter();

@@ -13,6 +13,7 @@ pub enum Expr {
     Unary(token::Token, Box<Expr>),
     Binary(Box<Expr>, token::Token, Box<Expr>),
     Assignment(String, Box<Expr>),
+    Call(Box<Expr>, token::Token, Vec<Expr>),
 }
 
 /// Implements the visitor pattern
