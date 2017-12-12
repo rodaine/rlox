@@ -3,11 +3,12 @@
 use std::fmt;
 use std::default;
 use std::collections::{HashMap, HashSet};
+use std::hash::{Hash, Hasher};
 
 /// A Token read from source.
 ///
 /// A Token describes the lexeme read from a source.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct Token {
     /// This token's type
     pub typ: Type,
@@ -17,6 +18,8 @@ pub struct Token {
     pub literal: Option<Literal>,
     /// The starting line number this token was read from
     pub line: u64,
+    /// The character offset of the line where this token was read from
+    pub offset: u64,
 }
 
 impl Token {
@@ -32,7 +35,8 @@ impl default::Default for Token {
             typ: Type::EOF,
             lexeme: "".to_string(),
             literal: None,
-            line: 0
+            line: 0,
+            offset: 0,
         }
     }
 }
@@ -44,12 +48,51 @@ impl fmt::Display for Token {
 }
 
 /// Describes a literal string or number value
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Clone)]
 pub enum Literal {
     Nil,
     Boolean(bool),
     Number(f64),
     String(String),
+}
+
+impl Eq for Literal {}
+
+impl Hash for Literal {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        use token::Literal::*;
+
+        match *self {
+            Nil => "".hash(state),
+            Boolean(b) => b.hash(state),
+            Number(f) => f.to_bits().hash(state),
+            String(ref s) => s.hash(state),
+        }
+    }
+}
+
+impl PartialEq for Literal {
+    fn eq(&self, other: &Literal) -> bool {
+        use token::Literal::*;
+        match *self {
+            Nil => match *other {
+                Nil => true,
+                _ => false,
+            },
+            Boolean(ref a) => match *other {
+                Boolean(ref b) => a.eq(b),
+                _ => false,
+            },
+            Number(ref a) => match *other {
+                Number(ref b) => a.eq(b),
+                _ => false,
+            },
+            String(ref a) => match *other {
+                String(ref b) => a.eq(b),
+                _ => false
+            }
+        }
+    }
 }
 
 impl fmt::Display for Literal {

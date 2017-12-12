@@ -11,6 +11,7 @@ use rlox::{Result, Error};
 use rlox::scanner::TokenIterator;
 use rlox::parser::StmtIterator;
 use rlox::interpreter::Interpreter;
+use rlox::resolver::Resolver;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -57,11 +58,11 @@ fn run_prompt() -> Result<()> {
     }
 }
 
-fn run(i : &mut Interpreter, buf: &str) -> Result<()> {
+fn run(i: &mut Interpreter, buf: &str) -> Result<()> {
     for res in buf.chars().tokens().statements() {
         match res {
             Err(e) => writeln!(&mut stderr(), "{}", e)?,
-            Ok(stmt) => i.interpret(&stmt)?,
+            Ok(stmt) => Resolver::resolve(i, &stmt)?.interpret(&stmt)?,
         }
     }
     Ok(())

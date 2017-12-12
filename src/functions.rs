@@ -9,6 +9,13 @@ use std::rc::Rc;
 use std::borrow::Borrow;
 use result::Error;
 
+#[derive(Clone, Copy, PartialEq)]
+pub enum Type {
+    None,
+    Function,
+    Method,
+}
+
 pub trait Callable {
     fn call(&self, int: &mut Interpreter, args: &[Object]) -> Result<Object>;
     fn arity(&self) -> usize;
@@ -19,6 +26,7 @@ pub struct Clock;
 impl Callable for Clock {
     fn arity(&self) -> usize { 0 }
 
+    #[cfg_attr(feature = "cargo-clippy", allow(cast_lossless))]
     fn call(&self, _: &mut Interpreter, _: &[Object]) -> Result<Object> {
         let dur: Duration = SystemTime::now().
             duration_since(UNIX_EPOCH).expect("time went backwards");
@@ -45,7 +53,7 @@ impl Callable for LoxFunction {
     fn arity(&self) -> usize { self.1.len() }
 
     fn call(&self, _: &mut Interpreter, args: &[Object]) -> Result<Object> {
-        let env = Env::with_parent(self.0.clone());
+        let env = Env::with_parent(Rc::clone(&self.0));
         let params: &[String] = &self.1;
         let zip = params.into_iter().zip(args.into_iter());
 

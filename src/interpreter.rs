@@ -9,24 +9,46 @@ use env::Env;
 use object::Object;
 use std::rc::Rc;
 use functions::LoxFunction;
+use std::collections::HashMap;
 
 #[derive(Default)]
 pub struct Interpreter {
     pub env: Rc<Env>,
+    locals: Rc<HashMap<Expr, usize>>,
     repl: bool,
 }
 
 impl Interpreter {
-    pub fn new(repl: bool) -> Self { Interpreter { env: Env::new(), repl: repl } }
-    pub fn with_env(env : Rc<Env>) -> Self { Interpreter { env: env, repl: false } }
+    pub fn new(repl: bool) -> Self {
+        Self {
+            repl: repl,
+            ..Interpreter::default()
+        }
+    }
+
+    pub fn with_env(env: Rc<Env>) -> Self {
+        Self {
+            env: env,
+            repl: false,
+            ..Interpreter::default()
+        }
+    }
+
+    fn scoped(&self) -> Self {
+        Self {
+            env: Env::with_parent(Rc::clone(&self.env)),
+            repl: false,
+            locals: Rc::clone(&self.locals),
+        }
+    }
 
     pub fn interpret(&mut self, s: &Stmt) -> Result<()> { s.accept(self) }
 
-    fn scoped(&self) -> Self {
-        Interpreter {
-            env: Env::with_parent(self.env.clone()),
-            repl: false,
-        }
+
+    pub fn resolve(&mut self, b: &Expr, idx: usize) {
+        Rc::get_mut(&mut self.locals)
+            .expect("should be the only ref given the &mut")
+            .insert(b.clone(), idx);
     }
 }
 
@@ -36,12 +58,12 @@ impl ExprVisitor<Result<Object>> for Interpreter {
         use ast::expr::Expr::Literal as ExprLit;
 
         match *e {
-            Identifier(ref id) => self.visit_ident(id.to_owned()),
-            ExprLit(ref l) => Ok(Object::Literal(l.clone())),
+            Identifier(ref tkn) => self.visit_ident(tkn, e),
+            ExprLit(ref tkn) => Ok(Object::Literal(tkn.literal.as_ref().unwrap().clone())),
             Grouping(ref b) => self.evaluate(b.deref()),
             Unary(ref op, ref r) => self.visit_unary(op, r),
             Binary(ref l, ref op, ref r) => self.visit_binary(l, op, r),
-            Assignment(ref id, ref r) => self.visit_assignment(id.to_owned(), r),
+            Assignment(ref tkn, ref r) => self.visit_assignment(tkn, r),
             Call(ref expr, ref paren, ref body) => self.visit_call(expr, paren, body.deref()),
         }
     }
@@ -55,12 +77,12 @@ impl StmtVisitor<Result<()>> for Interpreter {
             Empty => Ok(()),
             Print(ref e) => self.visit_print_stmt(e),
             Expression(ref e) => self.visit_expr_stmt(e),
-            Declaration(ref n, ref e) => self.visit_decl(n.to_owned(), e.as_ref()),
+            Declaration(ref n, ref e) => self.visit_decl(n, e.as_ref()),
             Block(ref stmts) => self.visit_block(stmts),
             If(ref c, ref t, ref e) => self.visit_if(c, t.as_ref(), e.as_ref().map(|x| x.deref())),
             While(ref e, ref b) => self.visit_while(e, b.deref()),
             Break(l) => self.visit_break(l),
-            Function(ref n, ref p, ref b) => self.visit_function(n.to_owned(), p, b.clone()),
+            Function(ref n, ref p, ref b) => self.visit_function(n, p, Rc::clone(b)),
             Return(l, ref e) => self.visit_return(l, e),
         }
     }
@@ -81,12 +103,12 @@ impl Interpreter {
         Ok(())
     }
 
-    fn visit_decl(&mut self, name: String, init: Option<&Expr>) -> Result<()> {
+    fn visit_decl(&mut self, name: &str, init: Option<&Expr>) -> Result<()> {
         let val: Object = init.map_or_else(
             || Ok(Object::Literal(Literal::Nil)),
             |e| e.accept(self))?;
 
-        self.env.define(&name, val)
+        self.env.define(name, val)
     }
 
     fn visit_block(&mut self, stmts: &[Stmt]) -> Result<()> {
@@ -125,12 +147,12 @@ impl Interpreter {
         Err(Error::Break(line))
     }
 
-    fn visit_function(&mut self, name: String, params: &[String], body: Rc<Stmt>) -> Result<()> {
-        self.env.define(&name, Object::Func(LoxFunction::new(self.env.clone(), params, body)))
+    fn visit_function(&mut self, name: &str, params: &[String], body: Rc<Stmt>) -> Result<()> {
+        self.env.define(name, Object::Func(LoxFunction::new(Rc::clone(&self.env), params, body)))
     }
 
     fn visit_return(&mut self, line: u64, expr: &Expr) -> Result<()> {
-        let res : Object = self.evaluate(expr)?;
+        let res: Object = self.evaluate(expr)?;
         Err(Error::Return(line, res))
     }
 }
@@ -230,13 +252,18 @@ impl Interpreter {
         Ok(Object::Literal(res))
     }
 
-    fn visit_ident(&mut self, n: String) -> Result<Object> {
-        self.env.get(&n).map(|lit| lit.clone())
+    fn visit_ident(&mut self, tkn: &Token, e: &Expr) -> Result<Object> {
+        self.lookup_var(tkn, e)
     }
 
-    fn visit_assignment(&mut self, n: String, rhs: &Expr) -> Result<Object> {
+    fn visit_assignment(&mut self, tkn: &Token, rhs: &Expr) -> Result<Object> {
         let val = self.evaluate(rhs)?;
-        self.env.assign(&n, val).map(|lit| lit.clone())
+
+        if let Some(dist) = self.locals.get(rhs) {
+            self.env.assign_at(&tkn.lexeme, val, *dist)
+        } else {
+            self.env.assign(&tkn.lexeme, val)
+        }
     }
 
     fn visit_call(&mut self, expr: &Expr, paren: &Token, params: &[Expr]) -> Result<Object> {
@@ -250,10 +277,10 @@ impl Interpreter {
         if callee.arity() != params.len() {
             return self.err_near(
                 &format!("expected {} arguments but got {}", callee.arity(), params.len()),
-                paren, "".to_string())
+                paren, "".to_string());
         }
 
-        let mut args : Vec<Object> = Vec::with_capacity(params.len());
+        let mut args: Vec<Object> = Vec::with_capacity(params.len());
         for param in params {
             args.push(self.evaluate(param)?);
         }
@@ -263,6 +290,14 @@ impl Interpreter {
 }
 
 impl Interpreter {
+    fn lookup_var(&mut self, name: &Token, expr: &Expr) -> Result<Object> {
+        if let Some(dist) = self.locals.get(expr) {
+            self.env.get_at(&name.lexeme, *dist)
+        } else {
+            self.env.get_global(&name.lexeme)
+        }
+    }
+
     fn err_op(&self, msg: &str, op: &Token) -> Result<Object> {
         Err(Error::Runtime(
             op.line,

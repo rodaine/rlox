@@ -5,14 +5,14 @@ use Boxer;
 ///
 /// All `Expr` types can be evaluated to a `Literal`.
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum Expr {
-    Identifier(String),
-    Literal(token::Literal),
+    Identifier(token::Token),
+    Literal(token::Token),
     Grouping(Box<Expr>),
     Unary(token::Token, Box<Expr>),
     Binary(Box<Expr>, token::Token, Box<Expr>),
-    Assignment(String, Box<Expr>),
+    Assignment(token::Token, Box<Expr>),
     Call(Box<Expr>, token::Token, Vec<Expr>),
 }
 
