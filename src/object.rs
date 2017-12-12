@@ -1,4 +1,4 @@
-use token;
+use ast::token;
 use functions::Callable;
 use std::cmp::Ordering;
 use std::fmt;
@@ -13,7 +13,7 @@ pub enum Object {
 
 impl Object {
     pub fn is_truthy(&self) -> bool {
-        use token::Literal::*;
+        use ast::token::Literal::*;
 
         match *self {
             Object::Func(_) => true,
@@ -57,7 +57,7 @@ impl fmt::Display for Object {
 impl PartialOrd for Object {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         use std::cmp::Ordering::*;
-        use token::Literal::*;
+        use ast::token::Literal::*;
         use object::Object::Literal as ObjLit;
 
         match (self, other) {

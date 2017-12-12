@@ -60,7 +60,7 @@ impl Eq for Literal {}
 
 impl Hash for Literal {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        use token::Literal::*;
+        use ast::token::Literal::*;
 
         match *self {
             Nil => "".hash(state),
@@ -73,7 +73,8 @@ impl Hash for Literal {
 
 impl PartialEq for Literal {
     fn eq(&self, other: &Literal) -> bool {
-        use token::Literal::*;
+        use ast::token::Literal::*;
+
         match *self {
             Nil => match *other {
                 Nil => true,
@@ -97,7 +98,7 @@ impl PartialEq for Literal {
 
 impl fmt::Display for Literal {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        use token::Literal::*;
+        use ast::token::Literal::*;
 
         match *self {
             Nil => write!(f, "nil"),
@@ -160,7 +161,7 @@ impl Type {
     ///
     /// ```
     /// # extern crate rlox;
-    /// # use rlox::token::*;
+    /// # use rlox::ast::token::*;
     /// # fn main() {
     /// let t = Type::reserved("true").expect("'true' is a reserved keyword");
     /// assert_eq!(t, &Type::True);

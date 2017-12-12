@@ -4,7 +4,7 @@ use std::cmp::PartialOrd;
 use ast::expr::{Expr, Visitor as ExprVisitor};
 use ast::stmt::{Stmt, Visitor as StmtVisitor};
 use result::{Result, Error};
-use token::{Token, Literal};
+use ast::token::{Token, Literal};
 use env::Env;
 use object::Object;
 use std::rc::Rc;
@@ -162,8 +162,8 @@ impl Interpreter {
     fn evaluate(&mut self, b: &Expr) -> Result<Object> { b.accept(self) }
 
     fn visit_unary(&mut self, op: &Token, rhs: &Expr) -> Result<Object> {
-        use token::Type::{Minus, Bang};
-        use token::Literal::{Number, Boolean};
+        use ast::token::Type::{Minus, Bang};
+        use ast::token::Literal::{Number, Boolean};
 
         let r: Object = self.evaluate(rhs)?;
 
@@ -178,9 +178,9 @@ impl Interpreter {
     }
 
     fn visit_binary(&mut self, lhs: &Expr, op: &Token, rhs: &Expr) -> Result<Object> {
-        use token::Type::{Plus, Minus, Star, Slash, Greater, GreaterEqual, Less, LessEqual, EqualEqual, BangEqual, Or, And};
+        use ast::token::Type::{Plus, Minus, Star, Slash, Greater, GreaterEqual, Less, LessEqual, EqualEqual, BangEqual, Or, And};
         use std::cmp::Ordering as Ord;
-        use token::Literal::*;
+        use ast::token::Literal::*;
         use object::Object::Literal as ObjLit;
 
         if op.in_types(&[Or, And]) {
@@ -237,8 +237,8 @@ impl Interpreter {
     }
 
     fn visit_logical(&mut self, lhs: &Expr, op: &Token, rhs: &Expr) -> Result<Object> {
-        use token::Type::{Or, And};
-        use token::Literal::Boolean;
+        use ast::token::Type::{Or, And};
+        use ast::token::Literal::Boolean;
 
         let l: Object = self.evaluate(lhs)?;
 

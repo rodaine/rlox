@@ -3,7 +3,6 @@ extern crate lazy_static;
 
 mod result;
 
-pub mod token;
 pub mod ast;
 
 pub mod functions;

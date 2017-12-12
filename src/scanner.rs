@@ -5,7 +5,7 @@ use std::ops::Index;
 use std::str::Chars;
 
 use result::{Result, Error};
-use token::{Token, Type, Literal};
+use ast::token::{Token, Type, Literal};
 
 /// Scanner is an iterator that consumes a `Chars` iterator, returning `Result<Token>`.
 ///
@@ -15,7 +15,7 @@ use token::{Token, Type, Literal};
 /// ```
 /// # extern crate rlox;
 /// # use rlox::scanner::*;
-/// # use rlox::token;
+/// # use rlox::ast::token;
 /// # fn main() {
 /// let code = "num = 123";
 /// let mut scanner = Scanner::new(code.chars());
@@ -133,7 +133,7 @@ impl<'a> Scanner<'a> {
 
     fn literal_token(&self, typ: Type, lit: Option<Literal>) -> Option<Result<Token>> {
         Some(Ok(Token {
-            typ: typ,
+            typ,
             literal: lit,
             line: self.line,
             offset: self.offset - self.lexeme.len() as u64,
@@ -241,7 +241,7 @@ impl<'a> Iterator for Scanner<'a> {
     type Item = Result<Token>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        use token::Type::*;
+        use ast::token::Type::*;
 
         if self.eof {
             return None;

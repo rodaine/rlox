@@ -2,7 +2,7 @@ use interpreter::Interpreter;
 use object::Object;
 use result::Result;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use token::Literal::{Number, Nil};
+use ast::token::Literal::{Number, Nil};
 use ast::stmt::Stmt;
 use env::Env;
 use std::rc::Rc;
