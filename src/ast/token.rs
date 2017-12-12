@@ -161,7 +161,7 @@ impl Type {
     ///
     /// ```
     /// # extern crate rlox;
-    /// # use rlox::token::*;
+    /// # use rlox::ast::token::*;
     /// # fn main() {
     /// let t = Type::reserved("true").expect("'true' is a reserved keyword");
     /// assert_eq!(t, &Type::True);

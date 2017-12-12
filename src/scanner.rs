@@ -15,7 +15,7 @@ use ast::token::{Token, Type, Literal};
 /// ```
 /// # extern crate rlox;
 /// # use rlox::scanner::*;
-/// # use rlox::token;
+/// # use rlox::ast::token;
 /// # fn main() {
 /// let code = "num = 123";
 /// let mut scanner = Scanner::new(code.chars());
@@ -133,7 +133,7 @@ impl<'a> Scanner<'a> {
 
     fn literal_token(&self, typ: Type, lit: Option<Literal>) -> Option<Result<Token>> {
         Some(Ok(Token {
-            typ: typ,
+            typ,
             literal: lit,
             line: self.line,
             offset: self.offset - self.lexeme.len() as u64,
