@@ -115,9 +115,13 @@ impl<'a> Parser<'a> {
                 self.must_next(&[Semicolon])?;
                 expr
             }
-            Some(t) => match t?.typ {
-                Semicolon => Expr::Literal(Literal::Boolean(true)),
-                _ => unreachable!(),
+            Some(t) => {
+                Expr::Literal(Token {
+                    typ: True,
+                    lexeme: "true".to_owned(),
+                    literal: Some(Literal::Boolean(true)),
+                    ..t?
+                })
             }
         };
 
@@ -207,13 +211,17 @@ impl<'a> Parser<'a> {
     }
 
     fn return_statement(&mut self) -> Result<Stmt> {
-        let ln : u64 = match self.src.peek() {
+        let ln: u64 = match self.src.peek() {
             Some(res) => res.as_ref().map(|t| t.line).unwrap_or(0),
             None => 0,
         };
 
-        let expr : Expr = if self.check(&[Semicolon]) {
-            Expr::Literal(Literal::Nil)
+        let expr: Expr = if self.check(&[Semicolon]) {
+            Expr::Literal(Token {
+                typ: Nil,
+                lexeme: "nil".to_owned(),
+                ..Token::default()
+            })
         } else {
             self.expression()?
         };
@@ -235,7 +243,7 @@ impl<'a> Parser<'a> {
             let eq: Token = res?;
 
             return match expr {
-                Expr::Identifier(id) => Ok(Expr::Assignment(id, self.assignment()?.boxed())),
+                Expr::Identifier(tkn) => Ok(Expr::Assignment(tkn, self.assignment()?.boxed())),
                 _ => Err(Parser::unexpected(&eq)),
             };
         }
@@ -354,8 +362,8 @@ impl<'a> Parser<'a> {
     fn primary(&mut self) -> Result<Expr> {
         if let Some(Ok(tkn)) = self.check_next(&[Nil, True, False, String, Number, Identifier]) {
             return match tkn.typ {
-                Identifier => Ok(Expr::Identifier(tkn.lexeme.clone())),
-                Nil | True | False | Number | String => Ok(Expr::Literal(tkn.literal.unwrap())),
+                Identifier => Ok(Expr::Identifier(tkn)),
+                Nil | True | False | Number | String => Ok(Expr::Literal(tkn)),
                 _ => Err(Parser::unexpected(&tkn)),
             };
         }

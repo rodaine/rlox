@@ -43,6 +43,7 @@ pub struct Scanner<'a> {
     peeks: VecDeque<char>,
     lexeme: String,
     line: u64,
+    offset: u64,
     eof: bool,
 }
 
@@ -54,6 +55,7 @@ impl<'a> Scanner<'a> {
             peeks: VecDeque::with_capacity(2),
             lexeme: "".to_string(),
             line: 1,
+            offset: 0,
             eof: false,
         }
     }
@@ -62,7 +64,7 @@ impl<'a> Scanner<'a> {
 impl<'a> Scanner<'a> {
     fn advance(&mut self) -> Option<char> {
         if self.eof {
-            return None
+            return None;
         }
 
         match self.peeks.len() {
@@ -73,6 +75,7 @@ impl<'a> Scanner<'a> {
             Some('\0')
         }).and_then(|c| {
             self.lexeme.push(c);
+            self.offset += 1;
             Some(c)
         })
     }
@@ -100,7 +103,7 @@ impl<'a> Scanner<'a> {
     fn match_advance(&mut self, c: char) -> bool {
         if self.peek() == c {
             self.advance().unwrap();
-            return true
+            return true;
         }
 
         false
@@ -133,6 +136,7 @@ impl<'a> Scanner<'a> {
             typ: typ,
             literal: lit,
             line: self.line,
+            offset: self.offset - self.lexeme.len() as u64,
             lexeme: self.lexeme.clone(),
         }))
     }
@@ -240,7 +244,7 @@ impl<'a> Iterator for Scanner<'a> {
         use token::Type::*;
 
         if self.eof {
-            return None
+            return None;
         }
 
         self.lexeme.clear();
@@ -249,7 +253,7 @@ impl<'a> Iterator for Scanner<'a> {
             match self.advance().unwrap() {
                 '\0' => {
                     self.eof = true;
-                    return self.static_token(EOF)
+                    return self.static_token(EOF);
                 }
 
                 '(' => return self.static_token(LeftParen),
@@ -279,7 +283,8 @@ impl<'a> Iterator for Scanner<'a> {
                 c if c.is_whitespace() => {
                     self.lexeme.clear();
                     if c == '\n' {
-                        self.line += 1
+                        self.offset = 0;
+                        self.line += 1;
                     }
                 }
 
