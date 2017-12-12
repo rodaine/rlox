@@ -1,19 +1,18 @@
-use token;
+use ast::token::Token;
 use Boxer;
 
 /// An Expression Node
 ///
 /// All `Expr` types can be evaluated to a `Literal`.
-
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum Expr {
-    Identifier(token::Token),
-    Literal(token::Token),
+    Identifier(Token),
+    Literal(Token),
     Grouping(Box<Expr>),
-    Unary(token::Token, Box<Expr>),
-    Binary(Box<Expr>, token::Token, Box<Expr>),
-    Assignment(token::Token, Box<Expr>),
-    Call(Box<Expr>, token::Token, Vec<Expr>),
+    Unary(Token, Box<Expr>),
+    Binary(Box<Expr>, Token, Box<Expr>),
+    Assignment(Token, Box<Expr>),
+    Call(Box<Expr>, Token, Vec<Expr>),
 }
 
 /// Implements the visitor pattern
@@ -26,7 +25,9 @@ pub trait Visitor<T> {
 }
 
 impl Expr {
-    pub fn accept<T>(&self, v: &mut Visitor<T>) -> T { v.visit_expr(self) }
+    pub fn accept<T>(&self, v: &mut Visitor<T>) -> T {
+        v.visit_expr(self)
+    }
 }
 
 impl Boxer for Expr {

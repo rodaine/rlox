@@ -6,7 +6,7 @@ use result::{Result, Error};
 use interpreter::Interpreter;
 use std::collections::HashMap;
 use functions::Type as FunctionType;
-use token::Token;
+use ast::token::Token;
 
 pub struct Resolver<'a> {
     interpreter: &'a mut Interpreter,

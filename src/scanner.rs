@@ -5,7 +5,7 @@ use std::ops::Index;
 use std::str::Chars;
 
 use result::{Result, Error};
-use token::{Token, Type, Literal};
+use ast::token::{Token, Type, Literal};
 
 /// Scanner is an iterator that consumes a `Chars` iterator, returning `Result<Token>`.
 ///
@@ -241,7 +241,7 @@ impl<'a> Iterator for Scanner<'a> {
     type Item = Result<Token>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        use token::Type::*;
+        use ast::token::Type::*;
 
         if self.eof {
             return None;

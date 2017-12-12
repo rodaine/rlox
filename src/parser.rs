@@ -5,8 +5,8 @@ use ast::stmt::Stmt;
 use Boxer;
 use result::{Result, Error};
 use scanner::Scanner;
-use token::{Type, Token, Literal};
-use token::Type::*;
+use ast::token::{Type, Token, Literal};
+use ast::token::Type::*;
 use std::string::String as stdString;
 use std::rc::Rc;
 
