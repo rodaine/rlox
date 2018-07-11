@@ -196,9 +196,10 @@ impl<'a> Parser<'a> {
     fn block_statement(&mut self) -> Result<Stmt> {
         let mut stmts: Vec<Stmt> = Vec::new();
 
-        while self.check_next(&[RightBrace]).is_none() && !self.src.peek().is_none() {
+        while self.check_next(&[RightBrace]).is_none() && self.src.peek().is_some() {
             stmts.push(self.statement()?);
         }
+
 
         Ok(Stmt::Block(stmts))
     }

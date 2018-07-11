@@ -84,9 +84,9 @@ impl<'a> Scanner<'a> {
         assert!(n > 0, "lookahead must be greater than zero");
 
         while self.peeks.len() < n {
-            self.src.next().
-                or(Some('\0')).
-                map(|c| self.peeks.push_back(c));
+            if let Some(c) = self.src.next().or(Some('\0')) {
+                self.peeks.push_back(c)
+            }
         }
 
         *self.peeks.index(n - 1)

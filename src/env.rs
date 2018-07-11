@@ -119,11 +119,7 @@ impl Env {
         let mut env = self.parent.clone();
 
         for _ in 1..dist {
-            if env.is_none() {
-                return None;
-            }
-
-            env = env.as_ref().unwrap().parent();
+            env = env?.parent();
         }
 
         env

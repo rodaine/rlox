@@ -14,18 +14,20 @@ pub enum Writer {
 
 impl Writer {
     pub fn write(w: &Rc<RefCell<Self>>, txt: &str) -> Result<()> {
-        Ok(write!(w.borrow_mut(), "{}", txt)?)
+        write!(w.borrow_mut(), "{}", txt)?;
+        Ok(())
     }
 
     pub fn writeln(w: &Rc<RefCell<Self>>, txt: &str) -> Result<()> {
-        Ok(writeln!(w.borrow_mut(), "{}", txt)?)
+        writeln!(w.borrow_mut(), "{}", txt)?;
+        Ok(())
     }
 
     pub fn flush(w: &Rc<RefCell<Self>>) -> Result<()> {
-        Ok(w.borrow_mut().flush()?)
+        w.borrow_mut().flush()?;
+        Ok(())
     }
 }
-
 
 impl io::Write for Writer {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {

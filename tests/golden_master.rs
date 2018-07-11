@@ -1,13 +1,8 @@
-#![feature(proc_macro)]
-extern crate test_case_derive;
 extern crate rlox;
-
-use test_case_derive::test_case;
 
 use std::cell::RefCell;
 use std::fs::File;
 use std::io::{Cursor, SeekFrom};
-#[allow(unused_imports)]
 use std::io::prelude::*;
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -18,17 +13,14 @@ use rlox::output::Writer;
 
 const TEST_DATA: &str = "testdata";
 
-#[test_case("expr.lox", "expr.lox.out")]
-#[test_case("break.lox", "break.lox.out")]
-#[test_case("class.lox", "class.lox.out")]
-#[test_case("counter.lox", "counter.lox.out")]
-#[test_case("loops.lox", "loops.lox.out")]
-#[test_case("function.lox", "function.lox.out")]
-#[test_case("lambda.lox", "lambda.lox.out")]
-#[test_case("scopes.lox", "scopes.lox.out")]
-#[test_case("stmts.lox", "stmts.lox.out")]
-#[test_case("inheritance.lox", "inheritance.lox.out")]
-fn golden_masters(input: &str, output: &str) {
+macro_rules! test_case {
+    ($name:ident, $input:expr, $output:expr) => {
+        #[test]
+        fn $name() { run_golden_master($input, $output) }
+    };
+}
+
+fn run_golden_master(input: &str, output: &str) {
     let i: PathBuf = [TEST_DATA, input].iter().collect();
     let o: PathBuf = [TEST_DATA, output].iter().collect();
 
@@ -59,10 +51,21 @@ fn golden_masters(input: &str, output: &str) {
             Writer::Cursor(ref mut c) => {
                 c.seek(SeekFrom::Start(0)).expect("cannot seek to head of cursor");
                 c.read_to_string(&mut actual).expect("cannot read actual output");
-            },
+            }
             _ => unreachable!(),
         };
     }
 
     assert_eq!(&expected, &actual)
 }
+
+test_case!(expr, "expr.lox", "expr.lox.out");
+test_case!(brk, "break.lox", "break.lox.out");
+test_case!(class, "class.lox", "class.lox.out");
+test_case!(counter, "counter.lox", "counter.lox.out");
+test_case!(loops, "loops.lox", "loops.lox.out");
+test_case!(function, "function.lox", "function.lox.out");
+test_case!(lambda, "lambda.lox", "lambda.lox.out");
+test_case!(scopes, "scopes.lox", "scopes.lox.out");
+test_case!(stmts, "stmts.lox", "stmts.lox.out");
+test_case!(inheritance, "inheritance.lox", "inheritance.lox.out");
