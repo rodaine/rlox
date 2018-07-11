@@ -84,9 +84,9 @@ impl<'a> Scanner<'a> {
         assert!(n > 0, "lookahead must be greater than zero");
 
         while self.peeks.len() < n {
-            self.src.next().
-                or(Some('\0')).
-                map(|c| self.peeks.push_back(c));
+            if let Some(c) = self.src.next().or(Some('\0')) {
+                self.peeks.push_back(c)
+            }
         }
 
         *self.peeks.index(n - 1)
@@ -199,7 +199,7 @@ impl<'a> Scanner<'a> {
 
         let lex: &str = self.lexeme.as_ref();
         let typ = Type::reserved(lex)
-            .map_or(Type::Identifier, |t| t.clone());
+            .map_or(Type::Identifier, |t| *t);
 
         match typ {
             Type::Nil => self.literal_token(typ, Some(Literal::Nil)),

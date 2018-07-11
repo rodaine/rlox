@@ -15,4 +15,5 @@ print counter();
 
 var counter2 = makeCounter();
 print counter2();
+
 print counter();

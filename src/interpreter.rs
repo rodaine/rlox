@@ -1,49 +1,60 @@
-use std::ops::Deref;
 use std::cmp::PartialOrd;
+use std::collections::HashMap;
+use std::rc::Rc;
 
 use ast::expr::{Expr, Visitor as ExprVisitor};
 use ast::stmt::{Stmt, Visitor as StmtVisitor};
-use result::{Result, Error};
 use ast::token::{Token, Literal};
-use env::Env;
-use object::Object;
-use std::rc::Rc;
-use functions::LoxFunction;
-use std::collections::HashMap;
 
-#[derive(Default)]
+use class::{LoxClass, SUPER_ID, THIS_ID};
+use env::Env;
+use functions::{Callable, INITIALIZER_FUNC};
+use object::Object;
+use result::{Result, Error};
+use output::Writer;
+use std::cell::RefCell;
+
 pub struct Interpreter {
-    pub env: Rc<Env>,
+    env: Rc<Env>,
     locals: Rc<HashMap<Expr, usize>>,
     repl: bool,
+    stdout: Rc<RefCell<Writer>>,
 }
 
+#[cfg(feature = "debug-destructors")]
+impl Drop for Interpreter {
+    fn drop(&mut self) {
+        match (Rc::strong_count(&self.locals), Rc::strong_count(&self.env)) {
+            (1, e) => debug_drop!("Interpreter::Root ({} env refs remaining)", e-1),
+            (l, e) => debug_drop!("Interpreter::Child ({} parent & {} env refs remaining)", l-2, e-1),
+        }
+    }
+}
+
+
 impl Interpreter {
-    pub fn new(repl: bool) -> Self {
-        Self {
-            repl: repl,
-            ..Interpreter::default()
-        }
+    pub fn new(repl: bool, stdout: Rc<RefCell<Writer>>) -> Interpreter {
+        let i = Interpreter {
+            repl,
+            env: Env::new(),
+            locals: Rc::new(HashMap::new()),
+            stdout,
+        };
+
+        debug_create!("Interpreter::Root (REPL: {})", i.repl);
+
+        i
     }
 
-    pub fn with_env(env: Rc<Env>) -> Self {
-        Self {
-            env: env,
-            repl: false,
-            ..Interpreter::default()
-        }
-    }
-
-    fn scoped(&self) -> Self {
-        Self {
-            env: Env::with_parent(Rc::clone(&self.env)),
-            repl: false,
+    pub fn with_env(&self, env: Rc<Env>) -> Interpreter {
+        debug_create!("interpreter with env{}", "");
+        Interpreter {
+            env,
             locals: Rc::clone(&self.locals),
+            repl: self.repl,
+            stdout: Rc::clone(&self.stdout),
         }
     }
-
-    pub fn interpret(&mut self, s: &Stmt) -> Result<()> { s.accept(self) }
-
 
     pub fn resolve(&mut self, b: &Expr, idx: usize) {
         Rc::get_mut(&mut self.locals)
@@ -53,119 +64,23 @@ impl Interpreter {
 }
 
 impl ExprVisitor<Result<Object>> for Interpreter {
-    fn visit_expr(&mut self, e: &Expr) -> Result<Object> {
-        use ast::expr::Expr::*;
-        use ast::expr::Expr::Literal as ExprLit;
-
-        match *e {
-            Identifier(ref tkn) => self.visit_ident(tkn, e),
-            ExprLit(ref tkn) => Ok(Object::Literal(tkn.literal.as_ref().unwrap().clone())),
-            Grouping(ref b) => self.evaluate(b.deref()),
-            Unary(ref op, ref r) => self.visit_unary(op, r),
-            Binary(ref l, ref op, ref r) => self.visit_binary(l, op, r),
-            Assignment(ref tkn, ref r) => self.visit_assignment(tkn, r),
-            Call(ref expr, ref paren, ref body) => self.visit_call(expr, paren, body.deref()),
-        }
-    }
-}
-
-impl StmtVisitor<Result<()>> for Interpreter {
-    fn visit_stmt(&mut self, s: &Stmt) -> Result<()> {
-        use ast::stmt::Stmt::*;
-
-        match *s {
-            Empty => Ok(()),
-            Print(ref e) => self.visit_print_stmt(e),
-            Expression(ref e) => self.visit_expr_stmt(e),
-            Declaration(ref n, ref e) => self.visit_decl(n, e.as_ref()),
-            Block(ref stmts) => self.visit_block(stmts),
-            If(ref c, ref t, ref e) => self.visit_if(c, t.as_ref(), e.as_ref().map(|x| x.deref())),
-            While(ref e, ref b) => self.visit_while(e, b.deref()),
-            Break(l) => self.visit_break(l),
-            Function(ref n, ref p, ref b) => self.visit_function(n, p, Rc::clone(b)),
-            Return(l, ref e) => self.visit_return(l, e),
-        }
-    }
-}
-
-// Private, statement-related methods
-impl Interpreter {
-    fn visit_expr_stmt(&mut self, e: &Expr) -> Result<()> {
-        if self.repl {
-            self.visit_print_stmt(e)
-        } else {
-            e.accept(self).map(|_| ())
-        }
+    fn visit_identifier(&mut self, expr: &Expr, id: &Token) -> Result<Object> {
+        self.lookup_var(id, expr)
     }
 
-    fn visit_print_stmt(&mut self, e: &Expr) -> Result<()> {
-        println!("{}", e.accept(self)?);
-        Ok(())
+    fn visit_literal(&mut self, _expr: &Expr, lit: &Token) -> Result<Object> {
+        Ok(Object::Literal(lit.literal.as_ref().unwrap().clone()))
     }
 
-    fn visit_decl(&mut self, name: &str, init: Option<&Expr>) -> Result<()> {
-        let val: Object = init.map_or_else(
-            || Ok(Object::Literal(Literal::Nil)),
-            |e| e.accept(self))?;
-
-        self.env.define(name, val)
+    fn visit_grouping(&mut self, _expr: &Expr, inside: &Expr) -> Result<Object> {
+        inside.accept(self)
     }
 
-    fn visit_block(&mut self, stmts: &[Stmt]) -> Result<()> {
-        let mut scope: Self = self.scoped();
-        for stmt in stmts { stmt.accept(&mut scope)?; }
-        Ok(())
-    }
-
-    fn visit_if(&mut self, expr: &Expr, then_stmt: &Stmt, else_stmt: Option<&Stmt>) -> Result<()> {
-        let cond: Object = expr.accept(self)?;
-
-        if cond.is_truthy() {
-            return then_stmt.accept(self);
-        }
-
-        if else_stmt.is_none() {
-            Ok(())
-        } else {
-            else_stmt.unwrap().deref().accept(self)
-        }
-    }
-
-    fn visit_while(&mut self, expr: &Expr, body: &Stmt) -> Result<()> {
-        while self.evaluate(expr)?.is_truthy() {
-            match body.accept(self) {
-                Err(Error::Break(_)) => break,
-                Err(e) => return Err(e),
-                Ok(_) => (),
-            };
-        }
-
-        Ok(())
-    }
-
-    fn visit_break(&mut self, line: u64) -> Result<()> {
-        Err(Error::Break(line))
-    }
-
-    fn visit_function(&mut self, name: &str, params: &[String], body: Rc<Stmt>) -> Result<()> {
-        self.env.define(name, Object::Func(LoxFunction::new(Rc::clone(&self.env), params, body)))
-    }
-
-    fn visit_return(&mut self, line: u64, expr: &Expr) -> Result<()> {
-        let res: Object = self.evaluate(expr)?;
-        Err(Error::Return(line, res))
-    }
-}
-
-// Private, expression-related methods
-impl Interpreter {
-    fn evaluate(&mut self, b: &Expr) -> Result<Object> { b.accept(self) }
-
-    fn visit_unary(&mut self, op: &Token, rhs: &Expr) -> Result<Object> {
+    fn visit_unary(&mut self, _expr: &Expr, op: &Token, rhs: &Expr) -> Result<Object> {
         use ast::token::Type::{Minus, Bang};
         use ast::token::Literal::{Number, Boolean};
 
-        let r: Object = self.evaluate(rhs)?;
+        let r: Object = rhs.accept(self)?;
 
         match op.typ {
             Minus => match r {
@@ -177,8 +92,9 @@ impl Interpreter {
         }
     }
 
-    fn visit_binary(&mut self, lhs: &Expr, op: &Token, rhs: &Expr) -> Result<Object> {
-        use ast::token::Type::{Plus, Minus, Star, Slash, Greater, GreaterEqual, Less, LessEqual, EqualEqual, BangEqual, Or, And};
+    fn visit_binary(&mut self, _expr: &Expr, lhs: &Expr, op: &Token, rhs: &Expr) -> Result<Object> {
+        use ast::token::Type::{Plus, Minus, Star, Slash, Greater, GreaterEqual,
+                               Less, LessEqual, EqualEqual, BangEqual, Or, And};
         use std::cmp::Ordering as Ord;
         use ast::token::Literal::*;
         use object::Object::Literal as ObjLit;
@@ -187,25 +103,25 @@ impl Interpreter {
             return self.visit_logical(lhs, op, rhs);
         }
 
-        let l: Object = self.evaluate(lhs)?;
-        let r: Object = self.evaluate(rhs)?;
+        let l: Object = lhs.accept(self)?;
+        let r: Object = rhs.accept(self)?;
 
         let res: Literal = match op.typ {
-            Plus => match (self.evaluate(lhs)?, self.evaluate(rhs)?) {
-                (ObjLit(Number(ln)), ObjLit(Number(rn))) => Number(ln + rn),
-                (ObjLit(String(ln)), ObjLit(r)) => String(format!("{}{}", ln, r)),
-                (ObjLit(l), ObjLit(String(rn))) => String(format!("{}{}", l, rn)),
-                (l, r) => return self.err_near(
+            Plus => match (l, r) {
+                (ObjLit(Number(ref ln)), ObjLit(Number(ref rn))) => Number(ln + rn),
+                (ObjLit(String(ref ln)), ObjLit(ref r)) => String(format!("{}{}", ln, r)),
+                (ObjLit(ref l), ObjLit(String(ref rn))) => String(format!("{}{}", l, rn)),
+                (ref l, ref r) => return self.err_near(
                     "cannot add mixed types",
                     op, format!("{:?} + {:?}", l, r)),
             },
-            Minus => match (self.evaluate(lhs)?, self.evaluate(rhs)?) {
+            Minus => match (l, r) {
                 (ObjLit(Number(ln)), ObjLit(Number(rn))) => Number(ln - rn),
                 (l, r) => return self.err_near(
                     "cannot subtract non-numerics",
                     op, format!("{:?} - {:?}", l, r)),
             },
-            Star => match (self.evaluate(lhs)?, self.evaluate(rhs)?) {
+            Star => match (l, r) {
                 (ObjLit(Number(ln)), ObjLit(Number(rn))) => Number(ln * rn),
                 (l, r) => return self.err_near(
                     "cannot multiply non-numerics",
@@ -236,66 +152,216 @@ impl Interpreter {
         Ok(ObjLit(res))
     }
 
+    fn visit_assignment(&mut self, _expr: &Expr, id: &Token, val: &Expr) -> Result<Object> {
+        let v = val.accept(self)?;
+        self.env.assign_at(id, v, self.locals.get(val))
+    }
+
+    fn visit_call(&mut self, _expr: &Expr, callee: &Expr, paren: &Token, args: &[Expr]) -> Result<Object> {
+        match callee.accept(self)? {
+            Object::Func(ref func) => self.dispatch_call(func, paren, args),
+            Object::Class(ref cls) => self.dispatch_call(&Callable::init(cls), paren, args),
+            x => self.err_near(
+                "can only call functions and classes",
+                paren, format!("{}", x)),
+        }
+    }
+
+    fn visit_get(&mut self, _expr: &Expr, callee: &Expr, prop: &Token) -> Result<Object> {
+        match callee.accept(self)? {
+            Object::Instance(ref inst) => inst.get(prop),
+            _ => Err(Error::Runtime(
+                prop.line,
+                "only instances have properties".to_owned(),
+                prop.lexeme.to_owned(),
+            ))
+        }
+    }
+
+    fn visit_set(&mut self, _expr: &Expr, settee: &Expr, prop: &Token, val: &Expr) -> Result<Object> {
+        if let Object::Instance(ref inst) = settee.accept(self)? {
+            inst.set(prop, val.accept(self)?)
+        } else {
+            Err(Error::Runtime(
+                prop.line,
+                "only instances have fields".to_owned(),
+                prop.lexeme.to_owned()))
+        }
+    }
+
+    fn visit_this(&mut self, expr: &Expr, tkn: &Token) -> Result<Object> {
+        self.lookup_var(tkn, expr)
+    }
+
+    fn visit_super(&mut self, expr: &Expr, tkn: &Token, method: &Token) -> Result<Object> {
+        let dist: usize = *self.locals.get(expr)
+            .expect("dist always available for super");
+
+        let parent = match self.env.get_at(tkn, Some(&dist))? {
+            Object::Class(ref c) => Rc::clone(c),
+            _ => return Err(Error::Runtime(tkn.line,
+                                           "unexpected super".to_owned(),
+                                           tkn.lexeme.to_owned())),
+        };
+
+        let inst = match self.env.get_at(&THIS_ID, Some(&(dist - 1)))? {
+            Object::Instance(ref i) => i.clone(),
+            _ => return Err(Error::Runtime(tkn.line,
+                                           "unexpected this".to_owned(),
+                                           tkn.lexeme.to_owned())),
+        };
+
+        match parent.find_method(&method.lexeme) {
+            Some(m) => Ok(Object::Func(m.bind(&inst))),
+            None => Err(Error::Runtime(
+                method.line,
+                "undefined property".to_owned(),
+                method.lexeme.to_owned())),
+        }
+    }
+}
+
+impl StmtVisitor<Result<()>> for Interpreter {
+    fn visit_empty(&mut self, _stmt: &Stmt) -> Result<()> { Ok(()) }
+
+    fn visit_break(&mut self, _stmt: &Stmt, tkn: &Token) -> Result<()> {
+        Err(Error::Break(tkn.line))
+    }
+
+    fn visit_expr_stmt(&mut self, stmt: &Stmt, expr: &Expr) -> Result<()> {
+        if self.repl {
+            self.visit_print(stmt, expr)
+        } else {
+            expr.accept(self).map(|_| ())
+        }
+    }
+
+    fn visit_print(&mut self, _stmt: &Stmt, expr: &Expr) -> Result<()> {
+        let obj = expr.accept(self)?;
+        Writer::writeln(&self.stdout, &format!("{}", obj))
+    }
+
+    fn visit_decl(&mut self, _stmt: &Stmt, id: &Token, init: Option<&Expr>) -> Result<()> {
+        let val: Object = init.map_or_else(
+            || Ok(Object::Literal(Literal::Nil)),
+            |e| e.accept(self))?;
+
+        self.env.define(id, val)
+    }
+
+    fn visit_block(&mut self, _stmt: &Stmt, body: &[Stmt]) -> Result<()> {
+        let mut scope = self.scoped();
+        for stmt in body { stmt.accept(&mut scope)?; }
+        Ok(())
+    }
+
+    fn visit_if(&mut self, _stmt: &Stmt, cond: &Expr, then: &Stmt, els: Option<&Stmt>) -> Result<()> {
+        if cond.accept(self)?.is_truthy() {
+            return then.accept(self);
+        }
+
+        if let Some(stmt) = els {
+            return stmt.accept(self);
+        }
+
+        Ok(())
+    }
+
+    fn visit_while(&mut self, _stmt: &Stmt, cond: &Expr, body: &Stmt) -> Result<()> {
+        while cond.accept(self)?.is_truthy() {
+            match body.accept(self) {
+                Err(Error::Break(_)) => return Ok(()),
+                Err(e) => return Err(e),
+                _ => (),
+            };
+        }
+        Ok(())
+    }
+
+    fn visit_func(&mut self, _stmt: &Stmt, id: &Token, params: &[Token], body: Rc<Stmt>) -> Result<()> {
+        let f = Callable::new(Env::from_weak(&self.env), params, &body, false);
+        self.env.define(id, Object::Func(f))
+    }
+
+    fn visit_return(&mut self, _stmt: &Stmt, tkn: &Token, val: Option<&Expr>) -> Result<()> {
+        let res = match val {
+            Some(expr) => expr.accept(self)?,
+            None => Object::Literal(Literal::Nil),
+        };
+
+        Err(Error::Return(tkn.line, res))
+    }
+
+    fn visit_class(&mut self, _stmt: &Stmt, id: &Token, parent: Option<&Expr>, methods: &[Stmt]) -> Result<()> {
+        let env = Env::from_weak(&self.env);
+
+        let superclass = if let Some(p) = parent {
+            let c = match p.accept(self)? {
+                Object::Class(ref c) => Rc::clone(c),
+                _ => return Err(Error::Parse(id.line,
+                                             "superclass must be a class".to_owned(),
+                                             id.lexeme.to_owned())),
+            };
+
+            env.define(&SUPER_ID, Object::Class(Rc::clone(&c)))?;
+
+            Some(c)
+        } else { None };
+
+        let mut ms = HashMap::with_capacity(methods.len());
+        for method in methods {
+            match *method {
+                Stmt::Function(ref id, ref params, ref body) => {
+                    let f = Callable::new(
+                        Rc::clone(&env),
+                        params,
+                        body,
+                        id.lexeme.eq(INITIALIZER_FUNC));
+
+                    ms.insert(id.lexeme.clone(), f);
+                }
+                _ => unreachable!(),
+            }
+        };
+
+
+        let cls = Rc::new(LoxClass::new(&id.lexeme, superclass, ms));
+        self.env.define(id, Object::Class(cls))
+    }
+}
+
+impl Interpreter {
+    fn scoped(&self) -> Interpreter {
+       let i = Interpreter {
+            env: Env::from(&self.env),
+            locals: Rc::clone(&self.locals),
+            repl: false,
+            stdout: Rc::clone(&self.stdout),
+        };
+
+        debug_create!("Interpreter::Scoped ({} parent refs now)", Rc::strong_count(&i.locals)-1);
+
+        i
+    }
+
     fn visit_logical(&mut self, lhs: &Expr, op: &Token, rhs: &Expr) -> Result<Object> {
         use ast::token::Type::{Or, And};
         use ast::token::Literal::Boolean;
 
-        let l: Object = self.evaluate(lhs)?;
+        let l: Object = lhs.accept(self)?;
 
         let res: Literal = match op.typ {
-            And if l.is_truthy() => Boolean(self.evaluate(rhs)?.is_truthy()),
+            And if l.is_truthy() => Boolean(rhs.accept(self)?.is_truthy()),
             Or if l.is_truthy() => Boolean(true),
-            Or => Boolean(self.evaluate(rhs)?.is_truthy()),
+            Or => Boolean(rhs.accept(self)?.is_truthy()),
             _ => Boolean(false),
         };
 
         Ok(Object::Literal(res))
     }
 
-    fn visit_ident(&mut self, tkn: &Token, e: &Expr) -> Result<Object> {
-        self.lookup_var(tkn, e)
-    }
-
-    fn visit_assignment(&mut self, tkn: &Token, rhs: &Expr) -> Result<Object> {
-        let val = self.evaluate(rhs)?;
-
-        if let Some(dist) = self.locals.get(rhs) {
-            self.env.assign_at(&tkn.lexeme, val, *dist)
-        } else {
-            self.env.assign(&tkn.lexeme, val)
-        }
-    }
-
-    fn visit_call(&mut self, expr: &Expr, paren: &Token, params: &[Expr]) -> Result<Object> {
-        let callee = match self.evaluate(expr)? {
-            Object::Func(c) => c,
-            x => return self.err_near(
-                "can only call functions and classes",
-                paren, format!("{:?}", x)),
-        };
-
-        if callee.arity() != params.len() {
-            return self.err_near(
-                &format!("expected {} arguments but got {}", callee.arity(), params.len()),
-                paren, "".to_string());
-        }
-
-        let mut args: Vec<Object> = Vec::with_capacity(params.len());
-        for param in params {
-            args.push(self.evaluate(param)?);
-        }
-
-        callee.call(self, &args)
-    }
-}
-
-impl Interpreter {
-    fn lookup_var(&mut self, name: &Token, expr: &Expr) -> Result<Object> {
-        if let Some(dist) = self.locals.get(expr) {
-            self.env.get_at(&name.lexeme, *dist)
-        } else {
-            self.env.get_global(&name.lexeme)
-        }
+    fn lookup_var(&mut self, id: &Token, expr: &Expr) -> Result<Object> {
+        self.env.get_at(id, self.locals.get(expr))
     }
 
     fn err_op(&self, msg: &str, op: &Token) -> Result<Object> {
@@ -312,5 +378,20 @@ impl Interpreter {
             msg.to_string(),
             near,
         ))
+    }
+
+    fn dispatch_call(&mut self, callee: &Callable, paren: &Token, args: &[Expr]) -> Result<Object> {
+        if callee.arity() != args.len() {
+            return self.err_near(
+                &format!("expected {} arguments but got {}", callee.arity(), args.len()),
+                paren, "".to_string());
+        }
+
+        let mut params: Vec<Object> = Vec::with_capacity(args.len());
+        for arg in args {
+            params.push(arg.accept(self)?);
+        }
+
+        callee.call(self, &params, paren)
     }
 }

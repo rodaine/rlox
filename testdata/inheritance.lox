@@ -1,0 +1,39 @@
+class Doughnut {
+  init() {
+    this.color = "golden brown";
+  }
+
+  cook() {
+    print "Fry until " + this.color + ".";
+  }
+
+  name() { return "Doughnut"; }
+}
+
+class BostonCreme < Doughnut {
+  init() {
+    super.init();
+    this.coating = "chocolate";
+  }
+
+  name() { return "BostonCreme"; }
+
+  ancestor() { return super.name(); }
+
+  cook() {
+    super.cook();
+    print "Pipe full of custard and coat with " + this.coating + ".";
+  }
+}
+
+class MyDoughnut < BostonCreme {
+  init(type) {
+    super.init();
+    this.type = type;
+  }
+}
+
+var bcs = MyDoughnut("BostonCreme with sprinkles");
+print bcs.ancestor();
+print bcs.name();
+bcs.cook();

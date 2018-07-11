@@ -1,9 +1,9 @@
 //! A module describing Lox tokens.
 
 use std::fmt;
-use std::default;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
+use std::cmp::Ordering;
 
 /// A Token read from source.
 ///
@@ -24,12 +24,17 @@ pub struct Token {
 
 impl Token {
     pub fn in_types(&self, types: &[Type]) -> bool {
-        let hs: HashSet<&Type> = types.iter().clone().collect();
-        hs.contains(&self.typ)
+        for typ in types {
+            if &self.typ == typ {
+                return true
+            }
+        }
+
+        false
     }
 }
 
-impl default::Default for Token {
+impl Default for Token {
     fn default() -> Self {
         Token {
             typ: Type::EOF,
@@ -96,6 +101,20 @@ impl PartialEq for Literal {
     }
 }
 
+impl PartialOrd<Self> for Literal {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        use ast::token::Literal::*;
+
+        match (self, other) {
+            (&Nil, &Nil) => Some(Ordering::Equal),
+            (&String(ref l), &String(ref r)) => l.partial_cmp(r),
+            (&Number(ref l), &Number(ref r)) => l.partial_cmp(r),
+            (&Boolean(ref l), &Boolean(ref r)) => l.partial_cmp(r),
+            _ => None,
+        }
+    }
+}
+
 impl fmt::Display for Literal {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use ast::token::Literal::*;
@@ -110,7 +129,7 @@ impl fmt::Display for Literal {
 }
 
 /// Describes the type of a Token
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum Type {
     LeftParen,
     RightParen,
