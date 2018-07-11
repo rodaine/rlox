@@ -1,0 +1,12 @@
+class Foo {
+  init() {
+    this.bar = "baz";
+  }
+
+  fizz(buzz) {
+    print this.bar + buzz;
+  }
+}
+
+var foo = Foo();
+foo.fizz("quux");

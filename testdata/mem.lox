@@ -1,0 +1,13 @@
+print "start";
+var x;
+print "entering block";
+{
+  print "entered block";
+  class Foo {}
+  print "class defined";
+  x = Foo();
+  print "x assigned";
+}
+print "exited block";
+print x;
+print "end";

@@ -199,7 +199,7 @@ impl<'a> Scanner<'a> {
 
         let lex: &str = self.lexeme.as_ref();
         let typ = Type::reserved(lex)
-            .map_or(Type::Identifier, |t| t.clone());
+            .map_or(Type::Identifier, |t| *t);
 
         match typ {
             Type::Nil => self.literal_token(typ, Some(Literal::Nil)),

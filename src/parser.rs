@@ -1,13 +1,12 @@
 use std::iter::Peekable;
 
 use ast::expr::Expr;
-use ast::stmt::Stmt;
+use ast::stmt::{Stmt, FUNCTION_ARGS_MAX};
 use Boxer;
 use result::{Result, Error};
 use scanner::Scanner;
 use ast::token::{Type, Token, Literal};
 use ast::token::Type::*;
-use std::string::String as stdString;
 use std::rc::Rc;
 
 pub struct Parser<'a> {
@@ -48,6 +47,7 @@ impl<'a> Parser<'a> {
             Break,
             Fun,
             Return,
+            Class,
         ]);
 
         if n.is_none() {
@@ -64,9 +64,10 @@ impl<'a> Parser<'a> {
             If => self.if_statement(),
             While => self.while_statement(),
             For => self.for_statement(),
-            Break => self.break_statement(),
+            Break => self.break_statement(tkn),
             Fun => self.function(),
-            Return => self.return_statement(),
+            Return => self.return_statement(tkn),
+            Class => self.class_decl(),
             _ => unreachable!(),
         }
     }
@@ -147,9 +148,9 @@ impl<'a> Parser<'a> {
         Ok(body)
     }
 
-    fn break_statement(&mut self) -> Result<Stmt> {
-        let t: Token = self.must_next(&[Semicolon])?;
-        Ok(Stmt::Break(t.line))
+    fn break_statement(&mut self, tkn: Token) -> Result<Stmt> {
+        self.must_next(&[Semicolon])?;
+        Ok(Stmt::Break(tkn))
     }
 
     fn expr_statement(&mut self) -> Result<Stmt> {
@@ -162,14 +163,34 @@ impl<'a> Parser<'a> {
         let id: Token = self.must_next(&[Identifier])?;
 
         if self.check_next(&[Equal]).is_none() {
-            return Ok(Stmt::Declaration(id.lexeme, None));
+            return Ok(Stmt::Declaration(id, None));
         }
 
         let expr: Expr = self.expression()?;
 
         self.must_next(&[Semicolon])?;
 
-        Ok(Stmt::Declaration(id.lexeme, Some(expr)))
+        Ok(Stmt::Declaration(id, Some(expr.boxed())))
+    }
+
+    fn class_decl(&mut self) -> Result<Stmt> {
+        let id = self.must_next(&[Identifier])?;
+
+        let parent = if self.check_next(&[Less]).is_some() {
+            Some(Expr::Identifier(self.must_next(&[Identifier])?).boxed())
+        } else { None };
+
+        self.must_next(&[LeftBrace])?;
+
+        let mut methods = Vec::new();
+        while !self.check(&[RightBrace]) {
+            methods.push(self.function()?);
+        }
+
+        self.must_next(&[RightBrace])?;
+
+        methods.shrink_to_fit();
+        Ok(Stmt::Class(id, parent, methods))
     }
 
     fn block_statement(&mut self) -> Result<Stmt> {
@@ -186,17 +207,17 @@ impl<'a> Parser<'a> {
         let name: Token = self.must_next(&[Identifier])?;
         self.must_next(&[LeftParen])?;
 
-        let mut params: Vec<stdString> = Vec::new();
+        let mut params: Vec<Token> = Vec::new();
 
         if !self.check(&[RightParen]) {
             loop {
-                if params.len() >= 8 {
+                if params.len() >= FUNCTION_ARGS_MAX {
                     return Err(Error::Parse(name.line,
-                                            "cannot have more than 8 arguments".to_string(),
+                                            format!("cannot have more than {} arguments", FUNCTION_ARGS_MAX),
                                             name.lexeme));
                 }
 
-                params.push(self.must_next(&[Identifier])?.lexeme);
+                params.push(self.must_next(&[Identifier])?);
 
                 if self.check_next(&[Comma]).is_none() {
                     break;
@@ -207,28 +228,19 @@ impl<'a> Parser<'a> {
         self.must_next(&[RightParen])?;
         self.must_next(&[LeftBrace])?;
 
-        Ok(Stmt::Function(name.lexeme, params, Rc::new(self.block_statement()?)))
+        Ok(Stmt::Function(name, params, Rc::new(self.block_statement()?)))
     }
 
-    fn return_statement(&mut self) -> Result<Stmt> {
-        let ln: u64 = match self.src.peek() {
-            Some(res) => res.as_ref().map(|t| t.line).unwrap_or(0),
-            None => 0,
-        };
-
-        let expr: Expr = if self.check(&[Semicolon]) {
-            Expr::Literal(Token {
-                typ: Nil,
-                lexeme: "nil".to_owned(),
-                ..Token::default()
-            })
+    fn return_statement(&mut self, tkn: Token) -> Result<Stmt> {
+        let expr = if self.check(&[Semicolon]) {
+            None
         } else {
-            self.expression()?
+            Some(self.expression()?.boxed())
         };
 
         self.must_next(&[Semicolon])?;
 
-        Ok(Stmt::Return(ln, expr))
+        Ok(Stmt::Return(tkn, expr))
     }
 }
 
@@ -243,8 +255,12 @@ impl<'a> Parser<'a> {
             let eq: Token = res?;
 
             return match expr {
-                Expr::Identifier(tkn) => Ok(Expr::Assignment(tkn, self.assignment()?.boxed())),
-                _ => Err(Parser::unexpected(&eq)),
+                Expr::Identifier(tkn) =>
+                    Ok(Expr::Assignment(tkn, self.assignment()?.boxed())),
+                Expr::Get(settee, prop) =>
+                    Ok(Expr::Set(settee.boxed(), prop, self.assignment()?.boxed())),
+                _ =>
+                    Err(Parser::unexpected(&eq)),
             };
         }
 
@@ -323,10 +339,14 @@ impl<'a> Parser<'a> {
         let mut expr = self.primary()?;
 
         loop {
-            expr = match self.check_next(&[LeftParen]) {
+            expr = match self.check_next(&[LeftParen, Dot]) {
                 Some(Err(e)) => return Err(e),
-                Some(Ok(_)) => self.finish_call(expr)?,
-                _ => break,
+                Some(Ok(tkn)) => match tkn.typ {
+                    LeftParen => self.finish_call(expr)?,
+                    Dot => Expr::Get(expr.boxed(), self.must_next(&[Identifier])?),
+                    _ => unreachable!(),
+                },
+                None => break,
             };
         }
 
@@ -360,12 +380,20 @@ impl<'a> Parser<'a> {
     }
 
     fn primary(&mut self) -> Result<Expr> {
-        if let Some(Ok(tkn)) = self.check_next(&[Nil, True, False, String, Number, Identifier]) {
+        if let Some(Ok(tkn)) = self.check_next(
+            &[Nil, True, False, String, Number, Identifier, This]) {
             return match tkn.typ {
+                This => Ok(Expr::This(tkn)),
                 Identifier => Ok(Expr::Identifier(tkn)),
                 Nil | True | False | Number | String => Ok(Expr::Literal(tkn)),
                 _ => Err(Parser::unexpected(&tkn)),
             };
+        }
+
+        if let Some(Ok(tkn)) = self.check_next(&[Super]) {
+            self.must_next(&[Dot])?;
+            let method = self.must_next(&[Identifier])?;
+            return Ok(Expr::Super(tkn, method));
         }
 
         if let Some(Ok(_)) = self.check_next(&[LeftParen]) {
