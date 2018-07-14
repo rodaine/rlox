@@ -2,10 +2,10 @@
 name = "rlox"
 version = "0.1.0"
 authors = ["Chris Roche <cargo@rodaine.com>"]
-description = "Rust implementation of the Lox language interpreter"
+description = "Rust implementation of the Lox language virtual machine"
 repository = "https://github.com/rodaine/rlox"
 readme = "README.md"
-keywords = ["lox", "interpreter", "pl", "compiler"]
+keywords = ["lox", "interpreter", "pl", "compiler", "virtual machine"]
 categories = ["parsing", "parser-implementations"]
 license = "MIT"
 
@@ -14,6 +14,7 @@ travis-ci = { repository = "rodaine/rlox" }
 
 [dependencies]
 lazy_static = "1.0.0"
+byteorder = "1"
 
 [features]
 debug-destructors = []
