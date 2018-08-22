@@ -28,13 +28,7 @@ impl OpCode {
         use chunk::OpCode::*;
 
         match self {
-            Unknown
-            | Return
-            | Negate
-            | Add
-            | Subtract
-            | Multiply
-            | Divide => 0,
+            Unknown | Return | Negate | Add | Subtract | Multiply | Divide => 0,
             Constant8 => 1,
             Constant16 => 2,
             Constant24 => 3,
@@ -213,13 +207,7 @@ impl Chunk {
         write!(f, "  {:<10?}", inst.op)?;
 
         match inst.op {
-            Return
-            | Unknown
-            | Negate
-            | Add
-            | Subtract
-            | Multiply
-            | Divide => {}
+            Return | Unknown | Negate | Add | Subtract | Multiply | Divide => {}
             Constant8 | Constant16 | Constant24 => {
                 let idx = Self::read_index(inst.data);
                 let val = self.read_const(idx);

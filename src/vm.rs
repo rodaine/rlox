@@ -1,7 +1,7 @@
 use chunk::Chunk;
 use std::fmt;
-use std::result;
 use std::ops::*;
+use std::result;
 use value::Value;
 
 #[derive(Debug)]
@@ -60,7 +60,9 @@ impl<'a> VM<'a> {
     }
 
     #[inline(always)]
-    fn push(&mut self, v: Value) { self.stack.push(v) }
+    fn push(&mut self, v: Value) {
+        self.stack.push(v)
+    }
 
     #[inline(always)]
     fn pop(&mut self) -> result::Result<Value, Error> {
@@ -69,7 +71,9 @@ impl<'a> VM<'a> {
 
     #[inline(always)]
     fn run_unary_op<F>(&mut self, op: F) -> Result
-        where F: FnOnce(Value) -> Value {
+    where
+        F: FnOnce(Value) -> Value,
+    {
         let v = self.stack.last_mut().ok_or(Error::Compile)?;
         *v = op(*v);
         Ok(())
@@ -77,7 +81,9 @@ impl<'a> VM<'a> {
 
     #[inline(always)]
     fn run_binary_op<F>(&mut self, op: F) -> Result
-        where F: FnOnce(Value, Value) -> Value {
+    where
+        F: FnOnce(Value, Value) -> Value,
+    {
         let b = self.pop()?;
         let v = self.stack.last_mut().ok_or(Error::Compile)?;
         *v = op(*v, b);
