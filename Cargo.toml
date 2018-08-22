@@ -22,12 +22,14 @@ debug-constructors = []
 debug-define = []
 debug-assign = []
 debug-timings = []
+debug-instructions = []
 debug = [
   "debug-destructors",
   "debug-constructors",
   "debug-define",
   "debug-assign",
   "debug-timings",
+  "debug-instructions",
 ]
 
 [[bin]]

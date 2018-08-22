@@ -1,6 +1,6 @@
 #[derive(Default, Debug)]
 pub struct SkipList<T: PartialEq> {
-    elems: Vec<(usize, T)>
+    elems: Vec<(usize, T)>,
 }
 
 impl<T: PartialEq> SkipList<T> {
@@ -12,7 +12,7 @@ impl<T: PartialEq> SkipList<T> {
 
         if let Some((_, val)) = self.elems.last() {
             if *val == el {
-               return
+                return;
             }
         }
 

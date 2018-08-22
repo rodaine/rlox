@@ -1,9 +1,9 @@
 extern crate byteorder;
 
+use self::byteorder::{ByteOrder, NativeEndian};
+use skip::SkipList;
 use std::fmt;
 use value::Value;
-use skip::SkipList;
-use self::byteorder::{ByteOrder, NativeEndian};
 
 const MAX_8: usize = u8::max_value() as usize;
 const MAX_16: usize = u16::max_value() as usize;
@@ -16,6 +16,11 @@ pub enum OpCode {
     Constant8,
     Constant16,
     Constant24,
+    Negate,
+    Add,
+    Subtract,
+    Multiply,
+    Divide,
 }
 
 impl OpCode {
@@ -23,11 +28,36 @@ impl OpCode {
         use chunk::OpCode::*;
 
         match self {
-            Unknown | Return => 0,
+            Unknown
+            | Return
+            | Negate
+            | Add
+            | Subtract
+            | Multiply
+            | Divide => 0,
             Constant8 => 1,
             Constant16 => 2,
             Constant24 => 3,
         }
+    }
+}
+
+pub struct Instruction<'a> {
+    pub op: OpCode,
+    pub data: &'a [u8],
+}
+
+impl<'a> Instruction<'a> {
+    pub fn new(op: OpCode, data: &'a [u8]) -> Self {
+        Self { op, data }
+    }
+
+    pub fn len(&self) -> usize {
+        1 + self.data.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        false
     }
 }
 
@@ -41,6 +71,11 @@ impl Into<u8> for OpCode {
             Constant8 => 2,
             Constant16 => 3,
             Constant24 => 4,
+            Negate => 5,
+            Add => 6,
+            Subtract => 7,
+            Multiply => 8,
+            Divide => 9,
         }
     }
 }
@@ -54,6 +89,11 @@ impl From<u8> for OpCode {
             2 => Constant8,
             3 => Constant16,
             4 => Constant24,
+            5 => Negate,
+            6 => Add,
+            7 => Subtract,
+            8 => Multiply,
+            9 => Divide,
             _ => Unknown,
         }
     }
@@ -68,15 +108,22 @@ pub struct Chunk {
 
 impl Chunk {
     pub fn write(&mut self, line: usize, op: OpCode, data: &[u8]) {
-        debug_assert!(op.data_len() == data.len(),
-                      "invalid data length {} for op {:?}", data.len(), op);
+        debug_assert!(
+            op.data_len() == data.len(),
+            "invalid data length {} for op {:?}",
+            data.len(),
+            op
+        );
 
         self.lines.push(self.code.len(), line);
         self.code.push(op.into());
         self.code.extend_from_slice(data);
     }
 
-    pub fn write_simple(&mut self, line: usize, op: OpCode) { self.write(line, op, &[]) }
+    pub fn write_simple(&mut self, line: usize, op: OpCode) {
+        debug_assert!(op.data_len() == 0);
+        self.write(line, op, &[])
+    }
 
     pub fn write_const(&mut self, line: usize, constant: Value) {
         use chunk::OpCode::*;
@@ -100,10 +147,13 @@ impl Chunk {
         }
     }
 
-    pub fn read(&self, offset: usize) -> (OpCode, &[u8]) {
-        let op = OpCode::from(*self.code.get(offset).expect("invalid offset"));
+    pub fn read(&self, offset: usize) -> Option<Instruction> {
+        if offset > self.code.len() {
+            return None;
+        }
+        let op = OpCode::from(self.code[offset]);
         let data = &self.code[offset + 1..offset + 1 + op.data_len()];
-        (op, data)
+        Some(Instruction::new(op, data))
     }
 
     pub fn read_index(data: &[u8]) -> usize {
@@ -120,7 +170,9 @@ impl Chunk {
         *self.constants.get(idx).expect("invalid index")
     }
 
-    pub fn disassemble(&self, name: &str) { eprint!("=== {} ===\n{:?}", name, self) }
+    pub fn disassemble(&self, name: &str) {
+        eprint!("=== {} ===\n{:?}", name, self)
+    }
 }
 
 impl fmt::Debug for Chunk {
@@ -129,6 +181,7 @@ impl fmt::Debug for Chunk {
         let mut line = 0;
         while offset < self.code.len() {
             let (o, l) = self.debug_inst(f, offset, line)?;
+            writeln!(f)?;
             offset = o;
             line = l;
         }
@@ -138,12 +191,16 @@ impl fmt::Debug for Chunk {
 }
 
 impl Chunk {
-    fn debug_inst(&self, f: &mut fmt::Formatter, offset: usize, last_line: usize) -> Result<(usize, usize), fmt::Error> {
+    pub fn debug_inst(
+        &self,
+        f: &mut fmt::Formatter,
+        offset: usize,
+        last_line: usize,
+    ) -> Result<(usize, usize), fmt::Error> {
         use chunk::OpCode::*;
 
-        let (op, data) = self.read(offset);
-        let line = self.lines.get(offset)
-            .cloned().unwrap_or(last_line);
+        let inst = self.read(offset).unwrap();
+        let line = self.lines.get(offset).cloned().unwrap_or(last_line);
 
         write!(f, "{:04}:  ", offset)?;
 
@@ -153,17 +210,23 @@ impl Chunk {
             write!(f, "L{:04}", line)?;
         }
 
-        write!(f, "  {:<10?}", op)?;
+        write!(f, "  {:<10?}", inst.op)?;
 
-        match op {
-            Return | Unknown => writeln!(f)?,
+        match inst.op {
+            Return
+            | Unknown
+            | Negate
+            | Add
+            | Subtract
+            | Multiply
+            | Divide => {}
             Constant8 | Constant16 | Constant24 => {
-                let idx = Self::read_index(data);
+                let idx = Self::read_index(inst.data);
                 let val = self.read_const(idx);
-                writeln!(f, "{:6}  ({:?})", idx, val)?;
+                write!(f, "{:6}  ({:?})", idx, val)?;
             }
         };
 
-        Ok((offset + 1 + data.len(), line))
+        Ok((offset + inst.len(), line))
     }
 }
