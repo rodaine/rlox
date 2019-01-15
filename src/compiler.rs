@@ -10,6 +10,7 @@ pub enum Error {}
 type Result = result::Result<Chunk, Error>;
 
 pub fn compile(source: &Rc<String>, line: usize) -> Result {
-    let scanner = Scanner::new_from_line(source, line);
-    unimplemented!()
+    let _scanner = Scanner::new_from_line(source, line);
+    Ok(Chunk::default())
+//    unimplemented!()
 }

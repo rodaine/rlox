@@ -142,7 +142,7 @@ impl Chunk {
     }
 
     pub fn read(&self, offset: usize) -> Option<Instruction> {
-        if offset > self.code.len() {
+        if offset >= self.code.len() {
             return None;
         }
         let op = OpCode::from(self.code[offset]);

@@ -31,9 +31,12 @@ pub struct VM<'a> {
 }
 
 impl<'a> VM<'a> {
-    pub fn interpret(source: String, line: usize) -> Result {
-        let _ = compile(&Rc::new(source), line)?;
-        unimplemented!()
+    pub fn interpret(chunk: &'a Chunk) -> Result {
+        Self {
+            chunk,
+            ip: 0,
+            stack: Vec::new(),
+        }.run()
     }
 
     #[allow(dead_code)]
