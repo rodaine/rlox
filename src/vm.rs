@@ -1,13 +1,23 @@
-use chunk::Chunk;
+use crate::chunk::Chunk;
 use std::fmt;
 use std::ops::*;
 use std::result;
-use value::Value;
+use crate::value::Value;
+use crate::compiler::compile_from_line;
+use std::rc::Rc;
+use std::io;
 
 #[derive(Debug)]
 pub enum Error {
+    IO(io::Error),
     Compile,
     Runtime,
+}
+
+impl From<io::Error> for Error {
+    fn from(err: io::Error) -> Self {
+        Error::IO(err)
+    }
 }
 
 pub type Result = result::Result<(), Error>;
@@ -19,17 +29,18 @@ pub struct VM<'a> {
 }
 
 impl<'a> VM<'a> {
-    pub fn interpret(chunk: &'a Chunk) -> Result {
-        let mut vm = Self {
-            chunk,
-            ip: 0,
-            stack: Vec::new(),
-        };
-        vm.run()
+    pub fn interpret(source: String) -> Result {
+        Self::interpret_from_line(source, 1)
     }
 
+    pub fn interpret_from_line(source: String, line: usize) -> Result {
+        compile_from_line(&Rc::new(source), line);
+        Ok(())
+    }
+
+    #[allow(dead_code)]
     fn run(&mut self) -> Result {
-        use chunk::OpCode::*;
+        use crate::chunk::OpCode::*;
 
         while let Some(inst) = self.chunk.read(self.ip) {
             if cfg!(feature = "debug-instructions") {

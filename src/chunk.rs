@@ -1,9 +1,9 @@
 extern crate byteorder;
 
 use self::byteorder::{ByteOrder, NativeEndian};
-use skip::SkipList;
+use crate::skip::SkipList;
 use std::fmt;
-use value::Value;
+use crate::value::Value;
 
 const MAX_8: usize = u8::max_value() as usize;
 const MAX_16: usize = u16::max_value() as usize;
@@ -25,7 +25,7 @@ pub enum OpCode {
 
 impl OpCode {
     pub fn data_len(self) -> usize {
-        use chunk::OpCode::*;
+        use crate::chunk::OpCode::*;
 
         match self {
             Unknown | Return | Negate | Add | Subtract | Multiply | Divide => 0,
@@ -57,7 +57,7 @@ impl<'a> Instruction<'a> {
 
 impl Into<u8> for OpCode {
     fn into(self) -> u8 {
-        use chunk::OpCode::*;
+        use crate::chunk::OpCode::*;
 
         match self {
             Unknown => 0,
@@ -76,7 +76,7 @@ impl Into<u8> for OpCode {
 
 impl From<u8> for OpCode {
     fn from(b: u8) -> Self {
-        use chunk::OpCode::*;
+        use crate::chunk::OpCode::*;
 
         match b {
             1 => Return,
@@ -120,7 +120,7 @@ impl Chunk {
     }
 
     pub fn write_const(&mut self, line: usize, constant: Value) {
-        use chunk::OpCode::*;
+        use crate::chunk::OpCode::*;
 
         let idx = self.constants.len();
         self.constants.push(constant);
@@ -191,7 +191,7 @@ impl Chunk {
         offset: usize,
         last_line: usize,
     ) -> Result<(usize, usize), fmt::Error> {
-        use chunk::OpCode::*;
+        use crate::chunk::OpCode::*;
 
         let inst = self.read(offset).unwrap();
         let line = self.lines.get(offset).cloned().unwrap_or(last_line);

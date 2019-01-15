@@ -1,19 +1,44 @@
 extern crate rlox;
 
-fn main() {
-    use rlox::chunk::OpCode::*;
-    use rlox::value::Value::*;
+use std::env;
+use std::io::{stdin, BufReader, BufRead};
+use std::fs;
 
-    let mut c = rlox::chunk::Chunk::default();
-    c.write_const(1, Number(1.2));
-    c.write_const(1, Number(3.4));
-    c.write_simple(1, Add);
-    c.write_const(1, Number(5.6));
-    c.write_simple(1, Divide);
-    c.write_simple(1, Negate);
-    c.write_simple(1, Return);
+use rlox::vm;
 
-    if let Err(e) = rlox::vm::VM::interpret(&c) {
-        eprintln!("{:?}", e)
+fn main() -> vm::Result {
+    let mut args = env::args();
+
+    match args.len() {
+        1 => repl(),
+        2 => run_file(&(args.nth(1).unwrap())),
+        _ => usage(),
     }
+}
+
+
+fn repl() -> vm::Result {
+    let input = BufReader::new(stdin());
+    print_cursor(1);
+
+    for (line, src) in input.lines().enumerate() {
+        vm::VM::interpret_from_line(src?, line+1)?;
+        print_cursor(line+2);
+    }
+
+    Ok(())
+}
+
+fn print_cursor(line: usize) {
+    eprint!("[{:03}]> ", line)
+}
+
+fn run_file(path: &str) -> vm::Result {
+    let input = fs::read_to_string(path)?;
+    vm::VM::interpret(input)
+}
+
+fn usage() -> vm::Result {
+    eprintln!("Usage: rlox [path]");
+    Ok(())
 }
