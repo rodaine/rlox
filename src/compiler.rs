@@ -1,11 +1,15 @@
 use crate::scanner::Scanner;
 use std::rc::Rc;
+use std::result;
 
-pub fn compile(source: &Rc<String>) {
-   compile_from_line(source, 1);
-}
+use crate::chunk::Chunk;
 
-pub fn compile_from_line(source: &Rc<String>, line: usize) {
+#[derive(Debug, Copy, Clone)]
+pub enum Error {}
+
+type Result = result::Result<Chunk, Error>;
+
+pub fn compile(source: &Rc<String>, line: usize) -> Result {
     let scanner = Scanner::new_from_line(source, line);
-    scanner.debug()
+    unimplemented!()
 }

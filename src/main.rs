@@ -22,7 +22,7 @@ fn repl() -> vm::Result {
     print_cursor(1);
 
     for (line, src) in input.lines().enumerate() {
-        vm::VM::interpret_from_line(src?, line+1)?;
+        vm::VM::interpret(src?, line+1)?;
         print_cursor(line+2);
     }
 

@@ -3,21 +3,23 @@ use std::fmt;
 use std::ops::*;
 use std::result;
 use crate::value::Value;
-use crate::compiler::compile_from_line;
+use crate::compiler::{compile, Error as CompileError};
 use std::rc::Rc;
 use std::io;
 
 #[derive(Debug)]
 pub enum Error {
     IO(io::Error),
-    Compile,
+    Compile(CompileError),
     Runtime,
 }
 
 impl From<io::Error> for Error {
-    fn from(err: io::Error) -> Self {
-        Error::IO(err)
-    }
+    fn from(err: io::Error) -> Self { Error::IO(err) }
+}
+
+impl From<CompileError> for Error {
+    fn from(err: CompileError) -> Self { Error::Compile(err) }
 }
 
 pub type Result = result::Result<(), Error>;
@@ -29,13 +31,9 @@ pub struct VM<'a> {
 }
 
 impl<'a> VM<'a> {
-    pub fn interpret(source: String) -> Result {
-        Self::interpret_from_line(source, 1)
-    }
-
-    pub fn interpret_from_line(source: String, line: usize) -> Result {
-        compile_from_line(&Rc::new(source), line);
-        Ok(())
+    pub fn interpret(source: String, line: usize) -> Result {
+        let _ = compile(&Rc::new(source), line)?;
+        unimplemented!()
     }
 
     #[allow(dead_code)]
@@ -48,7 +46,7 @@ impl<'a> VM<'a> {
             }
 
             match inst.op {
-                Unknown => return Err(Error::Compile),
+                Unknown => return Err(Error::Runtime),
                 Return => {
                     let v = self.pop()?;
                     println!("{:?}", v);
@@ -77,26 +75,26 @@ impl<'a> VM<'a> {
 
     #[inline(always)]
     fn pop(&mut self) -> result::Result<Value, Error> {
-        self.stack.pop().ok_or(Error::Compile)
+        self.stack.pop().ok_or(Error::Runtime)
     }
 
     #[inline(always)]
     fn run_unary_op<F>(&mut self, op: F) -> Result
-    where
-        F: FnOnce(Value) -> Value,
+        where
+            F: FnOnce(Value) -> Value,
     {
-        let v = self.stack.last_mut().ok_or(Error::Compile)?;
+        let v = self.stack.last_mut().ok_or(Error::Runtime)?;
         *v = op(*v);
         Ok(())
     }
 
     #[inline(always)]
     fn run_binary_op<F>(&mut self, op: F) -> Result
-    where
-        F: FnOnce(Value, Value) -> Value,
+        where
+            F: FnOnce(Value, Value) -> Value,
     {
         let b = self.pop()?;
-        let v = self.stack.last_mut().ok_or(Error::Compile)?;
+        let v = self.stack.last_mut().ok_or(Error::Runtime)?;
         *v = op(*v, b);
         Ok(())
     }
