@@ -6,14 +6,10 @@ pub struct Scanner {
 }
 
 impl Scanner {
-    pub fn new(source: &Rc<String>) -> Self {
-        Self::new_from_line(source, 1)
-    }
-
-    pub fn new_from_line(source: &Rc<String>, line: usize) -> Self {
-        Self {
-            inner: InnerToken::new(line, Lexeme::new(source, 0, 0)),
-        }
+    pub fn new(source: &Rc<String>, line: usize) -> Self {
+        let lex = Lexeme::new(source, 0, 0);
+        let inner = InnerToken::new(line, lex);
+        Self { inner }
     }
 
     pub fn debug(self) {
@@ -109,7 +105,7 @@ impl Scanner {
         }
 
         if let Some(typ) = TokenType::reserved(self.inner.lex.value()) {
-            return self.token(typ)
+            return self.token(typ);
         }
 
         self.token(TokenType::Identifier)

@@ -1,7 +1,7 @@
 use std::rc::Rc;
 use std::fmt;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct InnerToken {
     pub line: usize,
     pub col_offset: usize,
@@ -21,7 +21,7 @@ impl InnerToken {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Token {
     t: TokenType,
     inner: InnerToken,
@@ -41,13 +41,14 @@ impl Token {
     pub fn lex(&self) -> &Lexeme { &self.inner.lex }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum ErrorType {
     UnexpectedChar,
     UnterminatedString,
+    DoesNotExist,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum TokenType {
     // Single Char
     LeftParen,
@@ -156,7 +157,7 @@ impl Lexeme {
 
     pub(crate) fn char_at(&self, i: usize) -> char {
         if i >= self.source.len() {
-            return '\0'
+            return '\0';
         }
         self.source[i..].chars().next().unwrap()
     }

@@ -21,6 +21,13 @@ pub enum OpCode {
     Subtract,
     Multiply,
     Divide,
+    True,
+    False,
+    Nil,
+    Not,
+    Equal,
+    Greater,
+    Less,
 }
 
 impl OpCode {
@@ -28,10 +35,10 @@ impl OpCode {
         use crate::chunk::OpCode::*;
 
         match self {
-            Unknown | Return | Negate | Add | Subtract | Multiply | Divide => 0,
             Constant8 => 1,
             Constant16 => 2,
             Constant24 => 3,
+            _ => 0
         }
     }
 }
@@ -70,6 +77,13 @@ impl Into<u8> for OpCode {
             Subtract => 7,
             Multiply => 8,
             Divide => 9,
+            True => 10,
+            False => 11,
+            Nil => 12,
+            Not => 13,
+            Equal => 14,
+            Greater => 15,
+            Less => 16,
         }
     }
 }
@@ -88,6 +102,13 @@ impl From<u8> for OpCode {
             7 => Subtract,
             8 => Multiply,
             9 => Divide,
+            10 => True,
+            11 => False,
+            12 => Nil,
+            13 => Not,
+            14 => Equal,
+            15 => Greater,
+            16 => Less,
             _ => Unknown,
         }
     }
@@ -115,7 +136,6 @@ impl Chunk {
     }
 
     pub fn write_simple(&mut self, line: usize, op: OpCode) {
-        debug_assert!(op.data_len() == 0);
         self.write(line, op, &[])
     }
 
@@ -207,12 +227,12 @@ impl Chunk {
         write!(f, "  {:<10?}", inst.op)?;
 
         match inst.op {
-            Return | Unknown | Negate | Add | Subtract | Multiply | Divide => {}
             Constant8 | Constant16 | Constant24 => {
                 let idx = Self::read_index(inst.data);
                 let val = self.read_const(idx);
                 write!(f, "{:6}  ({:?})", idx, val)?;
             }
+            _ => {}
         };
 
         Ok((offset + inst.len(), line))
