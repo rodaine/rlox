@@ -3,7 +3,6 @@ use std::rc::Rc;
 use std::result;
 use std::f64::NAN;
 
-use crate::value::Value;
 use crate::token::{Token, TokenType, ErrorType};
 use crate::chunk::{Chunk, OpCode};
 
@@ -158,7 +157,7 @@ impl Compiler {
     fn number(&mut self) {
         let val = self.previous.as_ref()
             .map_or(NAN, |t| t.lex().value().parse().unwrap_or(NAN));
-        self.chunk.write_const(self.prev_line(), Value::Number(val))
+        self.chunk.write_const(self.prev_line(), val.into())
     }
 
     fn literal(&mut self) {
@@ -169,6 +168,16 @@ impl Compiler {
             Nil => self.write_simple(OpCode::Nil),
             _ => unreachable!(),
         }
+    }
+
+    fn string(&mut self) {
+        let mut lex = self.previous.as_ref().map(|t| t.lex().clone()).unwrap();
+        // tim quotes
+        lex.start += 1;
+        lex.length -= 2;
+
+        // TODO: translate escapes here!
+        self.chunk.write_const(self.prev_line(), lex.into())
     }
 
     fn advance(&mut self) {
@@ -238,6 +247,7 @@ impl Compiler {
             Minus | Bang => self.unary(),
             Number => self.number(),
             True | False | Nil => self.literal(),
+            String => self.string(),
             _ => return false,
         };
         true

@@ -143,6 +143,14 @@ impl Lexeme {
         }
     }
 
+    pub fn from_str(src: String) -> Self {
+        Self {
+            length: src.len(),
+            source: Rc::new(src),
+            start: 0,
+        }
+    }
+
     pub fn value(&self) -> &str {
         &self.source[self.start..self.end()]
     }

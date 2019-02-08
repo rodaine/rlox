@@ -1,6 +1,5 @@
 use crate::chunk::Chunk;
 use std::fmt;
-use std::ops::*;
 use std::result;
 use crate::value::{Value, Result as ValueResult, Error as ValueError};
 use crate::compiler::Error as CompileError;
@@ -48,14 +47,13 @@ impl<'a> VM<'a> {
         use crate::chunk::OpCode::*;
 
         while let Some(inst) = self.chunk.read(self.ip) {
-            if cfg!(feature = "debug-instructions") {
-                eprintln!("{:?}", self);
-            }
-
             match inst.op {
                 Unknown => return Err(Error::Runtime),
                 Return => {
                     let v = self.pop()?;
+                    if cfg!(feature = "debug-instructions") {
+                        eprintln!("{:?}", self);
+                    }
                     println!("{:?}", v);
                     return Ok(());
                 }
@@ -63,19 +61,25 @@ impl<'a> VM<'a> {
                     let c = self.chunk.read_const(Chunk::read_index(inst.data));
                     self.push(c);
                 }
+
                 True => self.push(Value::Bool(true)),
                 False => self.push(Value::Bool(false)),
                 Nil => self.push(Value::Nil),
-                Not => self.run_unary_op(Value::any, Value::not)?,
-                Negate => self.run_unary_op(Value::is_number, Value::neg)?,
-                Add => self.run_binary_op(Value::both_numbers, Value::add)?,
-                Subtract => self.run_binary_op(Value::both_numbers, Value::sub)?,
-                Multiply => self.run_binary_op(Value::both_numbers, Value::mul)?,
-                Divide => self.run_binary_op(Value::both_numbers, Value::div)?,
-                Equal => self.run_binary_op(Value::both_any, Value::equal)?,
-                Greater => self.run_binary_op(Value::both_numbers, Value::greater)?,
-                Less => self.run_binary_op(Value::both_numbers, Value::less)?
+                Not => self.run_unary_op(Value::any, Value::is_not)?,
+                Negate => self.run_unary_op(Value::is_number, Value::negate)?,
+                Add => self.run_binary_op(Value::both_any, Value::add)?,
+                Subtract => self.run_binary_op(Value::both_numbers, Value::subtract)?,
+                Multiply => self.run_binary_op(Value::both_numbers, Value::multiply)?,
+                Divide => self.run_binary_op(Value::both_numbers, Value::divide)?,
+                Equal => self.run_binary_op(Value::both_any, Value::equals)?,
+                Greater => self.run_binary_op(Value::both_numbers, Value::greater_than)?,
+                Less => self.run_binary_op(Value::both_numbers, Value::less_than)?
             }
+
+            if cfg!(feature = "debug-instructions") {
+                eprintln!("{:?}", self);
+            }
+
             self.ip += inst.len()
         }
 
@@ -96,11 +100,11 @@ impl<'a> VM<'a> {
     fn run_unary_op<C, F>(&mut self, check: C, op: F) -> Result
         where
             C: FnOnce(&Value) -> ValueResult<()>,
-            F: FnOnce(Value) -> Value,
+            F: FnOnce(&Value) -> Value,
     {
         check(self.stack.last().ok_or(Error::Runtime)?)?;
         let v = self.stack.last_mut().ok_or(Error::Runtime)?;
-        *v = op(*v);
+        *v = op(v);
         Ok(())
     }
 
@@ -108,7 +112,7 @@ impl<'a> VM<'a> {
     fn run_binary_op<C, F>(&mut self, check: C, op: F) -> Result
         where
             C: FnOnce(&Value, &Value) -> ValueResult<()>,
-            F: FnOnce(Value, Value) -> Value,
+            F: FnOnce(&Value, &Value) -> Value,
     {
         let split = self.stack.split_last().ok_or(Error::Runtime)?;
         let left = split.1.last().ok_or(Error::Runtime)?;
@@ -117,7 +121,7 @@ impl<'a> VM<'a> {
 
         let b = self.pop()?;
         let v = self.stack.last_mut().ok_or(Error::Runtime)?;
-        *v = op(*v, b);
+        *v = op(v, &b);
         Ok(())
     }
 }

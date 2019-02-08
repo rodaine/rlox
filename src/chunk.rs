@@ -181,7 +181,7 @@ impl Chunk {
     }
 
     pub fn read_const(&self, idx: usize) -> Value {
-        *self.constants.get(idx).expect("invalid index")
+        self.constants.get(idx).unwrap().clone()
     }
 
     pub fn disassemble(&self, name: &str) {
@@ -216,23 +216,17 @@ impl Chunk {
         let inst = self.read(offset).unwrap();
         let line = self.lines.get(offset).cloned().unwrap_or(last_line);
 
-        write!(f, "{:04}:  ", offset)?;
-
-        if line == last_line {
-            write!(f, "    |")?;
-        } else {
-            write!(f, "L{:04}", line)?;
-        }
-
-        write!(f, "  {:<10?}", inst.op)?;
+        write!(f, "{:04}:L{:04}  {:<10}  ", offset, line, format!("{:?}", inst.op))?;
 
         match inst.op {
             Constant8 | Constant16 | Constant24 => {
                 let idx = Self::read_index(inst.data);
                 let val = self.read_const(idx);
-                write!(f, "{:6}  ({:?})", idx, val)?;
+                write!(f, "#{:<6} {:<30}", idx, format!("{:?}", val))?;
             }
-            _ => {}
+            _ => {
+                write!(f, "                                      ")?;
+            }
         };
 
         Ok((offset + inst.len(), line))
