@@ -159,7 +159,9 @@ impl Compiler {
     fn parse_precedence(&mut self, prec: Precedence) {
         self.advance();
 
-        if !self.call_prefix(self.prev_type()) {
+        let can_assign = prec <= Precedence::Assignment;
+
+        if !self.call_prefix(self.prev_type(), can_assign) {
             self.error("expect expression");
             return;
         }
@@ -167,6 +169,11 @@ impl Compiler {
         while prec <= Precedence::from(self.curr_type()) {
             self.advance();
             self.call_infix(self.prev_type());
+        }
+
+        if can_assign && self.matches(TokenType::Equal) {
+            self.error("invalid assignment target");
+            self.expression();
         }
     }
 
@@ -233,15 +240,20 @@ impl Compiler {
         self.chunk.write_const(self.prev_line(), lex.into());
     }
 
-    fn variable(&mut self) {
-        self.named_variable();
+    fn variable(&mut self, can_assign: bool) {
+        self.named_variable(can_assign);
     }
 
-    fn named_variable(&mut self) {
+    fn named_variable(&mut self, can_assign: bool) {
         use self::OpCode::*;
         let lex = self.previous.as_ref().unwrap().lex();
         let idx = self.chunk.make_const(lex.into());
-        self.chunk.write_idx(self.prev_line(), &[GetGlobal8, GetGlobal16, GetGlobal24], idx);
+
+        if can_assign && self.matches(TokenType::Equal) {
+            self.chunk.write_idx(self.prev_line(), &[SetGlobal8, SetGlobal16, SetGlobal24], idx);
+        } else {
+            self.chunk.write_idx(self.prev_line(), &[GetGlobal8, GetGlobal16, GetGlobal24], idx);
+        }
     }
 
     fn advance(&mut self) {
@@ -317,7 +329,7 @@ impl Compiler {
         }
     }
 
-    fn call_prefix(&mut self, typ: TokenType) -> bool {
+    fn call_prefix(&mut self, typ: TokenType, can_assign: bool) -> bool {
         use self::TokenType::*;
         match typ {
             LeftParen => self.grouping(),
@@ -325,7 +337,7 @@ impl Compiler {
             Number => self.number(),
             True | False | Nil => self.literal(),
             String => self.string(),
-            Identifier => self.variable(),
+            Identifier => self.variable(can_assign),
             _ => return false,
         };
         true

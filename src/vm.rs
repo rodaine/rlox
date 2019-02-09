@@ -91,6 +91,14 @@ impl<'a> VMExecution<'a> {
                         .ok_or_else(|| Error::UndefinedVariable(lex.clone()))?;
                     self.push(val.clone());
                 }
+                SetGlobal8 | SetGlobal16 | SetGlobal24 => {
+                    let name = self.chunk.read_const(chunk::bytes_to_usize(inst.data)).into_lex();
+                    let val = self.peek()?;
+                    if !self.state.globals.contains_key(&name) {
+                        return Err(Error::UndefinedVariable(name));
+                    }
+                    self.state.globals.insert(name, val.clone());
+                }
 
                 True => self.push(Value::Bool(true)),
                 False => self.push(Value::Bool(false)),
@@ -122,6 +130,10 @@ impl<'a> VMExecution<'a> {
     #[inline(always)]
     fn pop(&mut self) -> result::Result<Value, Error> {
         self.state.stack.pop().ok_or(Error::Runtime)
+    }
+
+    fn peek(&self) -> result::Result<&Value, Error> {
+        self.state.stack.last().ok_or(Error::Runtime)
     }
 
     #[inline(always)]

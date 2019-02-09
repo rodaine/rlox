@@ -36,6 +36,9 @@ pub enum OpCode {
     GetGlobal8,
     GetGlobal16,
     GetGlobal24,
+    SetGlobal8,
+    SetGlobal16,
+    SetGlobal24,
 }
 
 impl OpCode {
@@ -43,9 +46,9 @@ impl OpCode {
         use crate::chunk::OpCode::*;
 
         match self {
-            Constant8 | DefineGlobal8 | GetGlobal8 => 1,
-            Constant16 | DefineGlobal16 | GetGlobal16 => 2,
-            Constant24 | DefineGlobal24 | GetGlobal24 => 3,
+            Constant8 | DefineGlobal8 | GetGlobal8 | SetGlobal8 => 1,
+            Constant16 | DefineGlobal16 | GetGlobal16 | SetGlobal16 => 2,
+            Constant24 | DefineGlobal24 | GetGlobal24 | SetGlobal24 => 3,
             _ => 0
         }
     }
@@ -100,6 +103,9 @@ impl Into<u8> for OpCode {
             GetGlobal8 => 22,
             GetGlobal16 => 23,
             GetGlobal24 => 24,
+            SetGlobal8 => 25,
+            SetGlobal16 => 26,
+            SetGlobal24 => 27,
         }
     }
 }
@@ -133,6 +139,9 @@ impl From<u8> for OpCode {
             22 => GetGlobal8,
             23 => GetGlobal16,
             24 => GetGlobal24,
+            25 => SetGlobal8,
+            26 => SetGlobal16,
+            27 => SetGlobal24,
             _ => Unknown,
         }
     }
@@ -243,7 +252,8 @@ impl Chunk {
         match inst.op {
             Constant8 | Constant16 | Constant24 |
             DefineGlobal8 | DefineGlobal16 | DefineGlobal24 |
-            GetGlobal8 | GetGlobal16 | GetGlobal24 => {
+            GetGlobal8 | GetGlobal16 | GetGlobal24 |
+            SetGlobal8 | SetGlobal16 | SetGlobal24 => {
                 let idx = bytes_to_usize(inst.data);
                 let val = self.read_const(idx);
                 write!(f, "#{:<6} {:<30}", idx, format!("{:?}", val))?;
