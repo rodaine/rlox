@@ -28,7 +28,9 @@ fn repl() -> vm::Result {
     for (line, src) in input.lines().enumerate() {
         let source = Rc::new(src?);
         let chunk = Compiler::new(&source, line + 1).compile()?;
-        vm.interpret(&chunk)?;
+        if let Err(e) = vm.interpret(&chunk) {
+            eprintln!("{:?}", e);
+        }
         print_cursor(line + 2);
     }
 

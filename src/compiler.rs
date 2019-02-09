@@ -248,8 +248,8 @@ impl Compiler {
         use self::OpCode::*;
         let lex = self.previous.as_ref().unwrap().lex();
         let idx = self.chunk.make_const(lex.into());
-
         if can_assign && self.matches(TokenType::Equal) {
+            self.expression();
             self.chunk.write_idx(self.prev_line(), &[SetGlobal8, SetGlobal16, SetGlobal24], idx);
         } else {
             self.chunk.write_idx(self.prev_line(), &[GetGlobal8, GetGlobal16, GetGlobal24], idx);
@@ -323,9 +323,7 @@ impl Compiler {
 
         // TODO: pretty print this
         if let Some(t) = self.current.as_ref() {
-            eprintln!("[Error] {}: {:?}", msg, t);
         } else {
-            eprintln!("[Error] {}", msg)
         }
     }
 
