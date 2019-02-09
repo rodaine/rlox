@@ -87,16 +87,73 @@ impl Compiler {
     pub fn compile(mut self) -> Result {
         self.advance();
 
-        self.expression();
-
-        if self.current.is_some() {
-            self.error("expected EOF");
-            self.has_error = true;
+        while self.current.is_some() {
+            self.declaration()
         }
 
-        self.write_simple(OpCode::Return);
-
         if self.has_error { Err(Error {}) } else { Ok(self.chunk) }
+    }
+
+    fn declaration(&mut self) {
+        if self.matches(TokenType::Var) {
+            self.variable_declaration()
+        } else {
+            self.statement();
+        }
+
+        self.synchronize();
+    }
+
+    fn statement(&mut self) {
+        if self.matches(TokenType::Print) {
+            self.print_statement()
+        } else {
+            self.expression_statement()
+        }
+    }
+
+    fn variable_declaration(&mut self) {
+        let var = self.parse_variable();
+
+        if self.matches(TokenType::Equal) {
+            self.expression();
+        } else {
+            self.write_simple(OpCode::Nil);
+        }
+        self.consume(TokenType::Semicolon);
+
+        self.define_variable(var)
+    }
+
+    fn parse_variable(&mut self) -> usize {
+        self.consume(TokenType::Identifier);
+        return self.identifier_const();
+    }
+
+    fn define_variable(&mut self, idx: usize) {
+        use self::OpCode::*;
+        self.chunk.write_idx(self.prev_line(), &[DefineGlobal8, DefineGlobal16, DefineGlobal24], idx);
+    }
+
+    fn identifier_const(&mut self) -> usize {
+        let id = self.previous.as_ref().unwrap();
+        return self.chunk.make_const(id.lex().into());
+    }
+
+    fn print_statement(&mut self) {
+        self.expression();
+        self.consume(TokenType::Semicolon);
+        self.write_simple(OpCode::Print)
+    }
+
+    fn expression_statement(&mut self) {
+        self.expression();
+        self.consume(TokenType::Semicolon);
+        self.write_simple(OpCode::Pop)
+    }
+
+    fn expression(&mut self) {
+        self.parse_precedence(Precedence::Assignment);
     }
 
     fn parse_precedence(&mut self, prec: Precedence) {
@@ -150,14 +207,10 @@ impl Compiler {
         }
     }
 
-    fn expression(&mut self) {
-        self.parse_precedence(Precedence::Assignment);
-    }
-
     fn number(&mut self) {
         let val = self.previous.as_ref()
             .map_or(NAN, |t| t.lex().value().parse().unwrap_or(NAN));
-        self.chunk.write_const(self.prev_line(), val.into())
+        self.chunk.write_const(self.prev_line(), val.into());
     }
 
     fn literal(&mut self) {
@@ -177,7 +230,18 @@ impl Compiler {
         lex.length -= 2;
 
         // TODO: translate escapes here!
-        self.chunk.write_const(self.prev_line(), lex.into())
+        self.chunk.write_const(self.prev_line(), lex.into());
+    }
+
+    fn variable(&mut self) {
+        self.named_variable();
+    }
+
+    fn named_variable(&mut self) {
+        use self::OpCode::*;
+        let lex = self.previous.as_ref().unwrap().lex();
+        let idx = self.chunk.make_const(lex.into());
+        self.chunk.write_idx(self.prev_line(), &[GetGlobal8, GetGlobal16, GetGlobal24], idx);
     }
 
     fn advance(&mut self) {
@@ -190,6 +254,19 @@ impl Compiler {
                 _ => return,
             };
         }
+    }
+
+    fn check(&self, typ: TokenType) -> bool {
+        self.current.as_ref().map_or(false, |t| t.typ() == typ)
+    }
+
+    fn matches(&mut self, typ: TokenType) -> bool {
+        if !self.check(typ) {
+            return false;
+        }
+
+        self.advance();
+        return true;
     }
 
     fn consume(&mut self, typ: TokenType) {
@@ -248,6 +325,7 @@ impl Compiler {
             Number => self.number(),
             True | False | Nil => self.literal(),
             String => self.string(),
+            Identifier => self.variable(),
             _ => return false,
         };
         true
@@ -260,5 +338,26 @@ impl Compiler {
             BangEqual | EqualEqual | Greater | GreaterEqual | Less | LessEqual => self.binary(),
             _ => {}
         }
+    }
+
+    fn synchronize(&mut self) {
+        if !self.has_error {
+            return;
+        }
+        self.has_error = false;
+
+        while self.current.is_some() {
+            if self.previous.as_ref().unwrap().typ() == TokenType::Semicolon {
+                return;
+            }
+
+            use self::TokenType::*;
+            match self.current.as_ref().unwrap().typ() {
+                Class | Fun | Var | For | If | While | Print | Return => return,
+                _ => (),
+            };
+        }
+
+        self.advance();
     }
 }

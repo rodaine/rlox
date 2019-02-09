@@ -1,9 +1,11 @@
-use crate::chunk::Chunk;
+use crate::chunk::{self, Chunk};
 use std::fmt;
 use std::result;
-use crate::value::{Value, Result as ValueResult, Error as ValueError};
+use crate::value::{Value, Object, Result as ValueResult, Error as ValueError};
 use crate::compiler::Error as CompileError;
 use std::io;
+use std::collections::HashMap;
+use crate::token::Lexeme;
 
 #[derive(Debug)]
 pub enum Error {
@@ -11,6 +13,7 @@ pub enum Error {
     Compile(CompileError),
     Value(ValueError),
     Runtime,
+    UndefinedVariable(Lexeme),
 }
 
 impl From<io::Error> for Error {
@@ -27,39 +30,66 @@ impl From<ValueError> for Error {
 
 pub type Result = result::Result<(), Error>;
 
-pub struct VM<'a> {
-    chunk: &'a Chunk,
-    ip: usize,
+pub struct VM {
     stack: Vec<Value>,
+    globals: HashMap<Lexeme, Value>,
 }
 
-impl<'a> VM<'a> {
-    pub fn interpret(chunk: &'a Chunk) -> Result {
+impl VM {
+    pub fn new() -> Self {
         Self {
-            chunk,
-            ip: 0,
             stack: Vec::new(),
-        }.run()
+            globals: HashMap::new(),
+        }
     }
 
-    #[allow(dead_code)]
+    pub fn interpret(&mut self, chunk: &Chunk) -> Result {
+        VMExecution {
+            chunk,
+            ip: 0,
+            state: self,
+        }.run()
+    }
+}
+
+struct VMExecution<'a> {
+    chunk: &'a Chunk,
+    ip: usize,
+    state: &'a mut VM,
+}
+
+impl<'a> VMExecution<'a> {
     fn run(&mut self) -> Result {
         use crate::chunk::OpCode::*;
 
         while let Some(inst) = self.chunk.read(self.ip) {
+            if cfg!(feature = "debug-instructions") {
+                eprintln!("{:?}", self);
+            }
+
             match inst.op {
                 Unknown => return Err(Error::Runtime),
                 Return => {
-                    let v = self.pop()?;
                     if cfg!(feature = "debug-instructions") {
                         eprintln!("{:?}", self);
                     }
-                    println!("{:?}", v);
                     return Ok(());
                 }
                 Constant8 | Constant16 | Constant24 => {
-                    let c = self.chunk.read_const(Chunk::read_index(inst.data));
+                    let c = self.chunk.read_const(chunk::bytes_to_usize(inst.data));
                     self.push(c);
+                }
+                DefineGlobal8 | DefineGlobal16 | DefineGlobal24 => {
+                    let name = self.chunk.read_const(chunk::bytes_to_usize(inst.data)).into_lex();
+                    let v = self.pop()?;
+                    self.state.globals.insert(name, v);
+                }
+                GetGlobal8 | GetGlobal16 | GetGlobal24 => {
+                    let name = self.chunk.read_const(chunk::bytes_to_usize(inst.data));
+                    let lex = name.lex();
+                    let val =  self.state.globals.get(lex)
+                        .ok_or_else(|| Error::UndefinedVariable(lex.clone()))?;
+                    self.push(val.clone());
                 }
 
                 True => self.push(Value::Bool(true)),
@@ -73,11 +103,9 @@ impl<'a> VM<'a> {
                 Divide => self.run_binary_op(Value::both_numbers, Value::divide)?,
                 Equal => self.run_binary_op(Value::both_any, Value::equals)?,
                 Greater => self.run_binary_op(Value::both_numbers, Value::greater_than)?,
-                Less => self.run_binary_op(Value::both_numbers, Value::less_than)?
-            }
-
-            if cfg!(feature = "debug-instructions") {
-                eprintln!("{:?}", self);
+                Less => self.run_binary_op(Value::both_numbers, Value::less_than)?,
+                Print => println!("{:?}", self.pop()?),
+                Pop => { self.pop()?; }
             }
 
             self.ip += inst.len()
@@ -88,12 +116,12 @@ impl<'a> VM<'a> {
 
     #[inline(always)]
     fn push(&mut self, v: Value) {
-        self.stack.push(v)
+        self.state.stack.push(v)
     }
 
     #[inline(always)]
     fn pop(&mut self) -> result::Result<Value, Error> {
-        self.stack.pop().ok_or(Error::Runtime)
+        self.state.stack.pop().ok_or(Error::Runtime)
     }
 
     #[inline(always)]
@@ -102,8 +130,8 @@ impl<'a> VM<'a> {
             C: FnOnce(&Value) -> ValueResult<()>,
             F: FnOnce(&Value) -> Value,
     {
-        check(self.stack.last().ok_or(Error::Runtime)?)?;
-        let v = self.stack.last_mut().ok_or(Error::Runtime)?;
+        check(self.state.stack.last().ok_or(Error::Runtime)?)?;
+        let v = self.state.stack.last_mut().ok_or(Error::Runtime)?;
         *v = op(v);
         Ok(())
     }
@@ -114,22 +142,22 @@ impl<'a> VM<'a> {
             C: FnOnce(&Value, &Value) -> ValueResult<()>,
             F: FnOnce(&Value, &Value) -> Value,
     {
-        let split = self.stack.split_last().ok_or(Error::Runtime)?;
+        let split = self.state.stack.split_last().ok_or(Error::Runtime)?;
         let left = split.1.last().ok_or(Error::Runtime)?;
         let right = split.0;
         check(left, right)?;
 
         let b = self.pop()?;
-        let v = self.stack.last_mut().ok_or(Error::Runtime)?;
+        let v = self.state.stack.last_mut().ok_or(Error::Runtime)?;
         *v = op(v, &b);
         Ok(())
     }
 }
 
-impl<'a> fmt::Debug for VM<'a> {
+impl<'a> fmt::Debug for VMExecution<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         self.chunk.debug_inst(f, self.ip, 0)?;
-        write!(f, "\ts:{:?}", self.stack)?;
+        write!(f, "\ts:{:?} g:{:?}", self.state.stack, self.state.globals)?;
         Ok(())
     }
 }

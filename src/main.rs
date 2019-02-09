@@ -23,11 +23,13 @@ fn repl() -> vm::Result {
     let input = BufReader::new(stdin());
     print_cursor(1);
 
+    let mut vm = vm::VM::new();
+
     for (line, src) in input.lines().enumerate() {
         let source = Rc::new(src?);
-        let chunk = Compiler::new(&source, line+1).compile()?;
-        vm::VM::interpret(&chunk)?;
-        print_cursor(line+2);
+        let chunk = Compiler::new(&source, line + 1).compile()?;
+        vm.interpret(&chunk)?;
+        print_cursor(line + 2);
     }
 
     Ok(())
@@ -40,7 +42,7 @@ fn print_cursor(line: usize) {
 fn run_file(path: &str) -> vm::Result {
     let source = Rc::new(fs::read_to_string(path)?);
     let chunk = Compiler::new(&source, 1).compile()?;
-    vm::VM::interpret(&chunk)
+    vm::VM::new().interpret(&chunk)
 }
 
 fn usage() -> vm::Result {

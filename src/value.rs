@@ -109,6 +109,20 @@ impl Value {
             _ => unreachable!(),
         }
     }
+
+    pub fn into_lex(self) -> Lexeme {
+        match self {
+            Value::Obj(Object::String(lex)) => lex,
+            _ => panic!("expected string"),
+        }
+    }
+
+    pub fn lex(&self) -> &Lexeme {
+        match self {
+            Value::Obj(Object::String(lex)) => lex,
+            _ => panic!("expected string"),
+        }
+    }
 }
 
 impl ops::Add for Value {

@@ -1,5 +1,7 @@
 use std::rc::Rc;
 use std::fmt;
+use std::cmp::{PartialEq, Eq};
+use std::hash::{Hash, Hasher};
 
 #[derive(Debug, Clone)]
 pub struct InnerToken {
@@ -204,5 +206,19 @@ impl Lexeme {
 impl fmt::Debug for Lexeme {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.value())
+    }
+}
+
+impl PartialEq for Lexeme {
+    fn eq(&self, other: &Self) -> bool {
+        self.value() == other.value()
+    }
+}
+
+impl Eq for Lexeme {}
+
+impl Hash for Lexeme {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.value().hash(state)
     }
 }

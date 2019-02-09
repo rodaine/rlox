@@ -28,6 +28,14 @@ pub enum OpCode {
     Equal,
     Greater,
     Less,
+    Print,
+    Pop,
+    DefineGlobal8,
+    DefineGlobal16,
+    DefineGlobal24,
+    GetGlobal8,
+    GetGlobal16,
+    GetGlobal24,
 }
 
 impl OpCode {
@@ -35,9 +43,9 @@ impl OpCode {
         use crate::chunk::OpCode::*;
 
         match self {
-            Constant8 => 1,
-            Constant16 => 2,
-            Constant24 => 3,
+            Constant8 | DefineGlobal8 | GetGlobal8 => 1,
+            Constant16 | DefineGlobal16 | GetGlobal16 => 2,
+            Constant24 | DefineGlobal24 | GetGlobal24 => 3,
             _ => 0
         }
     }
@@ -84,6 +92,14 @@ impl Into<u8> for OpCode {
             Equal => 14,
             Greater => 15,
             Less => 16,
+            Print => 17,
+            Pop => 18,
+            DefineGlobal8 => 19,
+            DefineGlobal16 => 20,
+            DefineGlobal24 => 21,
+            GetGlobal8 => 22,
+            GetGlobal16 => 23,
+            GetGlobal24 => 24,
         }
     }
 }
@@ -109,6 +125,14 @@ impl From<u8> for OpCode {
             14 => Equal,
             15 => Greater,
             16 => Less,
+            17 => Print,
+            18 => Pop,
+            19 => DefineGlobal8,
+            20 => DefineGlobal16,
+            21 => DefineGlobal24,
+            22 => GetGlobal8,
+            23 => GetGlobal16,
+            24 => GetGlobal24,
             _ => Unknown,
         }
     }
@@ -139,25 +163,33 @@ impl Chunk {
         self.write(line, op, &[])
     }
 
-    pub fn write_const(&mut self, line: usize, constant: Value) {
-        use crate::chunk::OpCode::*;
-
+    pub fn make_const(&mut self, constant: Value) -> usize {
         let idx = self.constants.len();
         self.constants.push(constant);
+        idx
+    }
 
+    pub fn write_const(&mut self, line: usize, constant: Value) -> usize {
+        use crate::chunk::OpCode::*;
+        let idx = self.make_const(constant);
+        self.write_idx(line, &[Constant8, Constant16, Constant24], idx);
+        idx
+    }
+
+    pub fn write_idx(&mut self, line: usize, ops: &[OpCode; 3], idx: usize) {
         match idx {
-            _ if idx <= MAX_8 => self.write(line, Constant8, &[idx as u8]),
-            _ if idx <= MAX_16 => {
+            x if x <= MAX_8 => self.write(line, ops[0], &[x as u8]),
+            x if x <= MAX_16 => {
                 let mut enc = [0; 2];
-                NativeEndian::write_u16(&mut enc, idx as u16);
-                self.write(line, Constant16, &enc)
+                NativeEndian::write_u16(&mut enc, x as u16);
+                self.write(line, ops[1], &enc);
             }
-            _ if idx <= MAX_24 => {
+            x if x < MAX_24 => {
                 let mut enc = [0; 3];
-                NativeEndian::write_u24(&mut enc, idx as u32);
-                self.write(line, Constant24, &enc)
+                NativeEndian::write_u24(&mut enc, x as u32);
+                self.write(line, ops[2], &enc);
             }
-            _ => unreachable!(),
+            _ => panic!("usize value overflow: {}", idx),
         }
     }
 
@@ -168,16 +200,6 @@ impl Chunk {
         let op = OpCode::from(self.code[offset]);
         let data = &self.code[offset + 1..offset + 1 + op.data_len()];
         Some(Instruction::new(op, data))
-    }
-
-    pub fn read_index(data: &[u8]) -> usize {
-        match data.len() {
-            0 => 0,
-            1 => data[0] as usize,
-            2 => NativeEndian::read_u16(data) as usize,
-            3 => NativeEndian::read_u24(data) as usize,
-            _ => panic!("invalid index size {}", data.len()),
-        }
     }
 
     pub fn read_const(&self, idx: usize) -> Value {
@@ -219,8 +241,10 @@ impl Chunk {
         write!(f, "{:04}:L{:04}  {:<10}  ", offset, line, format!("{:?}", inst.op))?;
 
         match inst.op {
-            Constant8 | Constant16 | Constant24 => {
-                let idx = Self::read_index(inst.data);
+            Constant8 | Constant16 | Constant24 |
+            DefineGlobal8 | DefineGlobal16 | DefineGlobal24 |
+            GetGlobal8 | GetGlobal16 | GetGlobal24 => {
+                let idx = bytes_to_usize(inst.data);
                 let val = self.read_const(idx);
                 write!(f, "#{:<6} {:<30}", idx, format!("{:?}", val))?;
             }
@@ -230,5 +254,14 @@ impl Chunk {
         };
 
         Ok((offset + inst.len(), line))
+    }
+}
+
+pub fn bytes_to_usize(bytes: &[u8]) -> usize {
+    match bytes.len() {
+        1 => bytes[0] as usize,
+        2 => NativeEndian::read_u16(bytes) as usize,
+        3 => NativeEndian::read_u24(bytes) as usize,
+        _ => panic!("invalid data size {}", bytes.len()),
     }
 }
